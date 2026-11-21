@@ -1,0 +1,951 @@
+@import "tailwindcss";
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans:
+        system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display",
+        "Helvetica Neue", "Segoe UI", sans-serif;
+
+    --color-navy-50: #f2f5f9;
+    --color-navy-100: #e2e9f2;
+    --color-navy-200: #c3d0e3;
+    --color-navy-300: #9db0cc;
+    --color-navy-400: #6f87ab;
+    --color-navy-500: #4c6489;
+    --color-navy-600: #384d6f;
+    --color-navy-700: #2b3d59;
+    --color-navy-800: #1e2c44;
+    --color-navy-900: #142038;
+    --color-navy-950: #0b1426;
+
+    --color-brass-100: #f5eddc;
+    --color-brass-300: #ddc79a;
+    --color-brass-500: #b9975b;
+    --color-brass-700: #7d6535;
+
+    --ease-lift: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+@layer base {
+    body {
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        background-color: #f4f6fa;
+    }
+
+    /* Latar foto halaman publik (login & landing). Diatur di CSS, bukan atribut style inline.
+       Path absolut agar tetap benar di mode build & dev server. */
+    .auth-backdrop {
+        background-image: url("/images/auth-bg.jpg");
+    }
+
+    /* Latar ilustrasi untuk halaman form lapor & cek status (di atasnya ada lapisan terang).
+       Gambar 1672x941 (16:9). `contain` menjaga seluruh ilustrasi tetap utuh di layar sempit
+       yang tinggi (tidak memotong kepala/mobil), lalu lapisan warna di bawahnya menutup sisa ruang. */
+    .pondok-backdrop {
+        background-color: #dfe8f4;
+        background-image: url("/images/lapor-bg.png");
+        background-repeat: no-repeat;
+        background-size: contain;
+        background-position: center center;
+    }
+
+    /* Lapisan penenang: sedikit kabut dingin agar form kaca tidak bertabrakan dengan ilustrasi. */
+    .pondok-backdrop::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            180deg,
+            rgba(223, 232, 244, 0.55) 0%,
+            rgba(223, 232, 244, 0.15) 38%,
+            rgba(223, 232, 244, 0.4) 100%
+        );
+    }
+
+    /* Halaman publik berlatarkan foto: body tidak perlu gradiennya sendiri. */
+    body.app-shell.pondok-shell {
+        background-image: none;
+        background-color: #f4f6fa;
+    }
+
+    /* Latar aplikasi: hanya dipakai layout dalam, agar tidak menimpa halaman gelap (login). */
+    body.app-shell {
+        background-color: #edf0f5;
+        background-image:
+            radial-gradient(
+                1200px 480px at 85% -10%,
+                rgba(43, 61, 89, 0.08),
+                transparent 60%
+            ),
+            radial-gradient(
+                900px 420px at -10% 0%,
+                rgba(185, 151, 91, 0.07),
+                transparent 55%
+            ),
+            linear-gradient(180deg, #f4f6fa 0%, #edf0f5 100%);
+        background-attachment: fixed;
+    }
+}
+
+::selection {
+    background: #142038;
+    color: #fff;
+}
+
+/* ---------- Nuansa iOS: system font dan permukaan liquid glass ---------- */
+body.ios-type {
+    font-family:
+        system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display",
+        "Helvetica Neue", "Segoe UI", sans-serif;
+}
+
+.ios-glass-light {
+    border: 1px solid rgba(255, 255, 255, 0.66);
+    background: rgba(255, 255, 255, 0.72);
+    -webkit-backdrop-filter: blur(24px) saturate(175%);
+    backdrop-filter: blur(24px) saturate(175%);
+    box-shadow:
+        0 24px 64px -34px rgba(11, 20, 38, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+/* ---------- Liquid glass form publik (/lapor, /lacak) ----------
+   Ditulis di dalam @layer components agar posisinya pasti di bawah utility
+   Tailwind: permukaan kaca dipasang lewat komponen <x-card> yang juga
+   membawa utility (rounded-2xl, card-shadow, lift), jadi utility tidak boleh
+   kalah dari aturan bebas-layer di bawah.
+
+   Bahan kaca disusun 4 lapis seperti kaca iOS: (1) lapisan buram terang yang
+   meredam foto latar, (2) gradien tipis dari sudut atas, (3) kilau specular
+   di tepi atas kiri, (4) pantulan cahaya di tepi bawah. Foto tetap terlihat
+   bertekstur, tapi teks tetap pekat karena kacanya "susu" (frosted). */
+@layer components {
+    .liquid-form-card.card-shadow {
+        background-color: rgba(247, 250, 255, 0.56);
+        background-image: linear-gradient(
+            155deg,
+            rgba(255, 255, 255, 0.6) 0%,
+            rgba(255, 255, 255, 0.32) 40%,
+            rgba(226, 234, 246, 0.24) 100%
+        );
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        -webkit-backdrop-filter: blur(22px) saturate(190%) brightness(1.02);
+        backdrop-filter: blur(22px) saturate(190%) brightness(1.02);
+        box-shadow:
+            0 30px 70px -34px rgba(11, 20, 38, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95),
+            inset 0 -1px 0 rgba(255, 255, 255, 0.35),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+            /* Tepi bawah diberi bayangan tipis agar tebal kaca terbaca. */
+            inset 0 -10px 18px -14px rgba(11, 20, 38, 0.35);
+    }
+
+    /* Kilau specular di tepi atas kiri — ciri khas permukaan liquid glass.
+       Radial paling terang diletakkan di 0% dan dibatasi 26% tinggi kartu,
+       jadi tidak menyapu area judul/label di bagian atas. */
+    .liquid-form-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 26%;
+        pointer-events: none;
+        background:
+            radial-gradient(
+                ellipse 80% 100% at 18% 0%,
+                rgba(255, 255, 255, 0.55) 0%,
+                rgba(255, 255, 255, 0.12) 50%,
+                transparent 76%
+            ),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 100%);
+        mix-blend-mode: screen;
+    }
+
+    /* Pantulan tepi bawah: mempertegas tebal kaca. */
+    .liquid-form-card::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 20%;
+        pointer-events: none;
+        background: linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0%, transparent 100%);
+    }
+
+    /* Form panjang tidak perlu terangkat saat disentuh. */
+    .liquid-form-card.lift:hover,
+    .liquid-form-card.lift:active {
+        transform: none;
+    }
+
+    /* Isi kartu mengambang di atas lapisan kaca. */
+    .liquid-form-card > .card-body {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Isian di dalam kaca: kaca bertinta, bukan putih pekat. Opacity 0.72
+       menjaga teks isian selalu kontras di atas foto yang ramai. */
+    .liquid-form-card .liquid-field {
+        background-color: rgba(255, 255, 255, 0.62);
+        border-color: rgba(148, 163, 184, 0.5);
+        color: #142038;
+        -webkit-backdrop-filter: blur(6px) saturate(140%);
+        backdrop-filter: blur(6px) saturate(140%);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.9),
+            inset 0 -1px 0 rgba(11, 20, 38, 0.04),
+            0 1px 2px rgba(11, 20, 38, 0.06);
+        transition:
+            background-color 0.2s ease,
+            border-color 0.2s ease,
+            box-shadow 0.2s ease;
+    }
+
+    /* Dropdown browser tidak bisa transparan: beri warna pekat senada kaca. */
+    .liquid-form-card .liquid-field option,
+    .liquid-form-card .liquid-field optgroup {
+        background-color: #f7faff;
+        color: #142038;
+    }
+
+    .liquid-form-card .liquid-field::placeholder {
+        color: #64748b;
+        opacity: 1;
+    }
+
+    .liquid-form-card .liquid-field:hover {
+        background-color: rgba(255, 255, 255, 0.82);
+    }
+
+    /* Cincin fokus lebih tebal dari aturan global agar tetap terlihat di atas kaca. */
+    .liquid-form-card .liquid-field:focus,
+    .liquid-form-card .liquid-field:focus-visible {
+        background-color: #ffffff;
+        border-color: rgba(20, 32, 56, 0.55);
+        outline: none;
+        box-shadow:
+            0 0 0 4px rgba(43, 61, 89, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .liquid-form-card input[type="file"].liquid-field {
+        background-color: rgba(255, 255, 255, 0.55);
+        border-style: dashed;
+        border-color: rgba(20, 32, 56, 0.28);
+        color: #384d6f;
+    }
+
+    /* Pratinjau foto sebagai chip kaca kecil. */
+    .liquid-form-card #photo-preview img {
+        border-radius: 0.75rem;
+        object-fit: cover;
+        box-shadow:
+            0 8px 20px -12px rgba(11, 20, 38, 0.5),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+    }
+
+    /* Teks di atas kaca harus tetap terbaca: label & bantuan pakai tinta pekat. */
+    .liquid-form-card label,
+    .liquid-form-card .liquid-form-label {
+        color: #16233c;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+    }
+
+    /* Keterangan "(opsional)" tetap lebih samar tapi masih terbaca di atas kaca. */
+    .liquid-form-card label .font-normal {
+        color: #52617a;
+    }
+
+    /* "Bayangan cahaya" tipis agar teks tidak tenggelam di atas foto. */
+    .liquid-form-card .card-body {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .liquid-form-card .card-body h2,
+    .liquid-form-card .card-body h3,
+    .liquid-form-card .card-body strong {
+        color: #0b1426;
+        text-shadow: none;
+    }
+
+    .liquid-form-card .card-body p,
+    .liquid-form-card .card-body span.font-normal {
+        color: #3d4a63;
+        text-shadow: none;
+    }
+
+    /* Keterangan kecil & placeholder tetap samar, tidak ikut "ditebalkan". */
+    .liquid-form-card .card-body p.text-slate-500,
+    .liquid-form-card .card-body .text-slate-500,
+    .liquid-form-card .card-body .text-slate-600 {
+        color: #475569;
+    }
+
+    /* Tombol sekunder (Kembali) sebagai kaca ringan, bukan blok putih. */
+    .liquid-form-card .liquid-action-ghost {
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        background-color: rgba(255, 255, 255, 0.5);
+        color: #384d6f;
+        -webkit-backdrop-filter: blur(8px) saturate(150%);
+        backdrop-filter: blur(8px) saturate(150%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    }
+
+    /* Tombol utama cembung: gradien tipis + highlight atas. */
+    .liquid-form-card .liquid-action-primary {
+        background-color: #142038;
+        background-image: linear-gradient(180deg, #24344f 0%, #142038 100%);
+        color: #fff;
+        box-shadow:
+            0 12px 24px -12px rgba(20, 32, 56, 0.7),
+            inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    }
+
+    .liquid-form-card .liquid-action-ghost:hover {
+        background-color: rgba(255, 255, 255, 0.78);
+        color: #142038;
+    }
+
+    /* Tombol utama cembung: gradien tipis + highlight atas. */
+    .liquid-form-card .liquid-action-primary {
+        background-image: linear-gradient(180deg, #24344f 0%, #142038 100%);
+        box-shadow:
+            0 12px 24px -12px rgba(20, 32, 56, 0.7),
+            inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    }
+
+    .liquid-form-card .liquid-action-primary:hover {
+        background-image: linear-gradient(180deg, #2b3d59 0%, #1e2c44 100%);
+    }
+
+    /* Di layar HP kedua tombol sejajar: tinggi seragam, teks tetap di tengah. */
+    .liquid-form-card .liquid-action-primary,
+    .liquid-form-card .liquid-action-ghost {
+        box-sizing: border-box;
+    }
+
+    @media (max-width: 639px) {
+        .liquid-form-card .liquid-action-primary,
+        .liquid-form-card .liquid-action-ghost {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 2.75rem;
+            min-height: 2.75rem;
+            padding: 0 1rem;
+            font-size: 14px;
+            text-align: center;
+        }
+    }
+}
+
+/* Kartu form login staf: permukaan liquid glass (kaca beku), tanpa gambar.
+   Latar foto halaman tetap terlihat samar di balik kartu lewat blur + saturasi,
+   persis seperti bahan kaca iOS. */
+.login-card {
+    background-color: rgba(255, 255, 255, 0.34);
+    background-image: linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.58) 0%,
+        rgba(255, 255, 255, 0.3) 45%,
+        rgba(255, 255, 255, 0.18) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    -webkit-backdrop-filter: blur(34px) saturate(185%);
+    backdrop-filter: blur(34px) saturate(185%);
+    box-shadow:
+        0 32px 80px -36px rgba(6, 12, 26, 0.62),
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Fallback: bila browser tidak mendukung backdrop-filter, kartu dibuat lebih
+   pekat agar teks tetap terbaca di atas foto latar. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .login-card {
+        background-color: rgba(20, 32, 56, 0.82);
+        background-image: linear-gradient(
+            145deg,
+            rgba(43, 61, 89, 0.9) 0%,
+            rgba(20, 32, 56, 0.86) 100%
+        );
+    }
+}
+
+
+
+/* Form di layar kecil: lebar mengikuti layar, padding lebih rapat, teks 16px agar tidak auto-zoom.
+   Sengaja di luar @layer components agar menang atas utility Tailwind (p-4, text-sm). */
+@media (max-width: 639px) {
+    .liquid-form-card.card-shadow {
+        border-radius: 1.25rem;
+        padding: 0;
+        background-color: rgba(247, 250, 255, 0.62);
+        -webkit-backdrop-filter: blur(18px) saturate(185%) brightness(1.02);
+        backdrop-filter: blur(18px) saturate(185%) brightness(1.02);
+        box-shadow:
+            0 18px 40px -26px rgba(11, 20, 38, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95),
+            inset 0 -1px 0 rgba(255, 255, 255, 0.35);
+    }
+
+    /* Di layar kecil kaca lebih tipis dari foto: pekatkan lapisan di belakang
+       form agar teks & label tetap punya kontras cukup. */
+    .pondok-shell .pondok-backdrop::after {
+        background-color: rgba(9, 16, 30, 0.34) !important;
+    }
+
+    .liquid-form-card > .card-body {
+        padding: 1rem 0.875rem;
+    }
+
+    .liquid-form-card form {
+        gap: 0.875rem;
+    }
+
+    .liquid-form-card .liquid-field {
+        font-size: 16px; /* cegah auto-zoom iOS saat fokus */
+        line-height: 1.4;
+        min-height: 2.75rem;
+        padding: 0.625rem 0.875rem;
+        border-radius: 0.875rem;
+    }
+
+    .liquid-form-card select.liquid-field {
+        padding-right: 2.25rem;
+    }
+
+    .liquid-form-card textarea.liquid-field {
+        min-height: 7rem;
+    }
+
+    .liquid-form-card input[type="file"].liquid-field {
+        min-height: 0;
+        padding: 0.625rem 0.75rem;
+    }
+
+    .liquid-form-card label,
+    .liquid-form-card .liquid-form-label {
+        font-size: 12.5px;
+    }
+
+    .liquid-form-card .liquid-action-primary,
+    .liquid-form-card .liquid-action-ghost {
+        padding-block: 0.75rem;
+    }
+}
+
+/* Layar sangat sempit: rapatkan lagi agar form tidak butuh scroll horizontal. */
+@media (max-width: 359px) {
+    .liquid-form-card > .card-body {
+        padding: 0.875rem 0.75rem;
+    }
+
+    .liquid-form-card .liquid-field {
+        font-size: 15.5px;
+        padding: 0.55rem 0.7rem;
+    }
+}
+
+/* Fallback: tanpa backdrop-filter kaca tidak bisa tembus pandang, jadi
+   permukaan dibuat pekat agar teks tetap terbaca di atas foto. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .liquid-form-card.card-shadow {
+        background-color: rgba(255, 255, 255, 0.94);
+        background-image: none;
+    }
+
+    .liquid-form-card .liquid-field {
+        background-color: #fff;
+    }
+}
+
+.ios-glass-dark {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(20, 32, 56, 0.62);
+    -webkit-backdrop-filter: blur(22px) saturate(155%);
+    backdrop-filter: blur(22px) saturate(155%);
+    box-shadow:
+        0 20px 44px -22px rgba(20, 32, 56, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* ---------- Lift system: setiap kartu terangkat halus ---------- */
+.lift {
+    transition:
+        transform 0.38s var(--ease-lift),
+        box-shadow 0.38s var(--ease-lift),
+        border-color 0.28s ease,
+        background-color 0.28s ease;
+    will-change: transform;
+}
+
+@media (hover: hover) {
+    .lift:hover {
+        transform: translateY(-5px);
+    }
+    .lift-soft:hover {
+        transform: translateY(-3px);
+    }
+}
+
+.lift:active {
+    transform: translateY(-1px) scale(0.995);
+}
+
+.card-shadow {
+    box-shadow:
+        0 1px 2px rgba(16, 27, 45, 0.05),
+        0 8px 24px -18px rgba(16, 27, 45, 0.25);
+}
+
+@media (hover: hover) {
+    .card-shadow.lift:hover,
+    .lift.card-shadow:hover {
+        box-shadow:
+            0 2px 4px rgba(16, 27, 45, 0.06),
+            0 24px 48px -20px rgba(16, 27, 45, 0.32);
+    }
+}
+
+/* ---------- Masuk halus per bagian ---------- */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Jeda diatur lewat class (bukan atribut style) agar patuh CSP nonce. */
+.reveal {
+    animation: rise 0.65s var(--ease-lift) both;
+    animation-delay: var(--reveal-delay, 0ms);
+}
+
+.delay-20 {
+    --reveal-delay: 20ms;
+}
+.delay-40 {
+    --reveal-delay: 40ms;
+}
+.delay-60 {
+    --reveal-delay: 60ms;
+}
+.delay-80 {
+    --reveal-delay: 80ms;
+}
+.delay-100 {
+    --reveal-delay: 100ms;
+}
+.delay-120 {
+    --reveal-delay: 120ms;
+}
+.delay-140 {
+    --reveal-delay: 140ms;
+}
+.delay-160 {
+    --reveal-delay: 160ms;
+}
+.delay-180 {
+    --reveal-delay: 180ms;
+}
+.delay-200 {
+    --reveal-delay: 200ms;
+}
+.delay-220 {
+    --reveal-delay: 220ms;
+}
+.delay-240 {
+    --reveal-delay: 240ms;
+}
+
+/* ---------- Sidebar ---------- */
+.nav-item {
+    position: relative;
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease,
+        transform 0.3s var(--ease-lift);
+}
+
+@media (hover: hover) {
+    .nav-item:hover {
+        transform: translateX(3px);
+    }
+}
+
+.nav-item.is-active::before {
+    content: "";
+    position: absolute;
+    left: -12px;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ddc79a, #b9975b);
+}
+
+/* ---------- Micro-interaction kecil ---------- */
+.link-arrow .arrow {
+    transition: transform 0.3s var(--ease-lift);
+}
+@media (hover: hover) {
+    .link-arrow:hover .arrow {
+        transform: translateX(4px);
+    }
+}
+
+.row-hover {
+    transition: background-color 0.2s ease;
+}
+
+.btn-press {
+    transition:
+        transform 0.18s ease,
+        background-color 0.2s ease,
+        box-shadow 0.25s ease,
+        border-color 0.2s ease;
+}
+.btn-press:active {
+    transform: translateY(1px) scale(0.99);
+}
+
+/* ---------- Form yang tenang ---------- */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        background-color 0.2s ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+select:focus,
+textarea:focus {
+    border-color: #6f87ab !important;
+    box-shadow: 0 0 0 4px rgba(43, 61, 89, 0.1);
+    outline: none;
+}
+
+input[type="file"]::file-selector-button {
+    transition:
+        background-color 0.2s ease,
+        transform 0.15s ease;
+}
+input[type="file"]::file-selector-button:active {
+    transform: scale(0.97);
+}
+
+/* ---------- Tabel ---------- */
+table tbody tr {
+    transition: background-color 0.18s ease;
+}
+
+/* ---------- Scrollbar ramping ---------- */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #c3d0e3 transparent;
+}
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+    background: #c3d0e3;
+    border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Fokus aksesibel yang tenang */
+:focus-visible {
+    outline: 2px solid var(--color-navy-500);
+    outline-offset: 2px;
+}
+
+/* Pagination Tailwind bawaan Laravel */
+nav[role="navigation"] svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+/* ---------- Tab bar iOS liquid glass (mobile) ---------- */
+.glass-tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
+}
+
+.glass-tabbar > nav {
+    pointer-events: auto;
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    max-width: 28rem;
+    margin: 0 auto;
+    padding: 6px;
+    border-radius: 26px;
+    background: rgba(255, 255, 255, 0.55);
+    background-image: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.65),
+        rgba(255, 255, 255, 0.35)
+    );
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border: 0.5px solid rgba(255, 255, 255, 0.7);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.55) inset,
+        0 -1px 0 rgba(15, 27, 45, 0.06) inset,
+        0 8px 32px -8px rgba(15, 27, 45, 0.28),
+        0 2px 8px -2px rgba(15, 27, 45, 0.12);
+}
+
+.tab-item {
+    position: relative;
+    display: flex;
+    flex: 1 1 0%;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 4px 5px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: rgba(15, 27, 45, 0.55);
+    -webkit-tap-highlight-color: transparent;
+    transition:
+        color 0.25s ease,
+        background-color 0.25s ease,
+        transform 0.25s var(--ease-lift);
+}
+
+.tab-item svg {
+    height: 22px;
+    width: 22px;
+    transition: transform 0.3s var(--ease-lift);
+}
+
+.tab-item:active {
+    transform: scale(0.92);
+}
+
+/* pil kaca saat aktif, ala iOS 26 */
+.tab-item.is-active {
+    color: #fff;
+    background: linear-gradient(
+        180deg,
+        rgba(43, 61, 89, 0.92),
+        rgba(15, 27, 45, 0.95)
+    );
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.28) inset,
+        0 -6px 12px -6px rgba(221, 199, 154, 0.55) inset,
+        0 6px 16px -6px rgba(15, 27, 45, 0.5);
+}
+
+.tab-item.is-active svg {
+    transform: translateY(-1px) scale(1.08);
+}
+
+@media (min-width: 1024px) {
+    .glass-tabbar {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+/* ---------- Overlay loading berlogo (kirim laporan, login, navigasi) ---------- */
+.santara-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(11, 20, 38, 0.55);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    backdrop-filter: blur(10px) saturate(140%);
+    opacity: 0;
+    transition: opacity 0.24s ease;
+}
+
+.santara-loader[hidden] {
+    display: none;
+}
+
+.santara-loader.is-visible {
+    opacity: 1;
+}
+
+.santara-loader-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 220px;
+    padding: 26px 30px 22px;
+    border-radius: 26px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow:
+        0 30px 70px -30px rgba(11, 20, 38, 0.65),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    animation: loader-pop 0.32s var(--ease-lift) both;
+}
+
+@keyframes loader-pop {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Cincin emas berputar di sekeliling logo pondok */
+.santara-loader-ring {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 78px;
+    width: 78px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 50% 30%, #ffffff, #f2f5f9 70%);
+    box-shadow: inset 0 1px 2px rgba(11, 20, 38, 0.08);
+}
+
+.santara-loader-ring::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 999px;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        rgba(185, 151, 91, 0.15) 90deg,
+        rgba(185, 151, 91, 0.95) 260deg,
+        rgba(20, 32, 56, 0.95) 340deg,
+        transparent 360deg
+    );
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+    animation: loader-spin 1.05s linear infinite;
+}
+
+@keyframes loader-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.santara-loader-logo {
+    height: 54px;
+    width: 54px;
+    object-fit: contain;
+    border-radius: 14px;
+    animation: loader-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes loader-breathe {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.06);
+    }
+}
+
+.santara-loader-title {
+    margin-top: 10px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: #142038;
+}
+
+.santara-loader-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: #64748b;
+}
+
+/* Garis progres tak tentu (indeterminate) */
+.santara-loader-bar {
+    position: relative;
+    overflow: hidden;
+    margin-top: 8px;
+    height: 3px;
+    width: 140px;
+    border-radius: 999px;
+    background: #e2e9f2;
+}
+
+.santara-loader-bar > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 40%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, #b9975b, #142038);
+    animation: loader-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes loader-slide {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(320%);
+    }
+}
+
+/* Tombol yang sedang memproses: teks/tombol diredupkan, spinner kecil tampil */
+.is-loading button[type="submit"],
+.is-loading .loader-target {
+    cursor: progress;
+}
+
+form.is-loading {
+    cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .santara-loader-ring::before,
+    .santara-loader-logo,
+    .santara-loader-bar > span {
+        animation: none !important;
+    }
+}
