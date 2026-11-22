@@ -19,7 +19,19 @@ class SantaraSeeder extends Seeder
             ['name' => 'Koordinator Keamanan', 'email' => 'keamanan@santara.test', 'role' => 'koordinator_keamanan', 'position' => 'Koordinator Keamanan'],
             ['name' => 'Koordinator Logistik', 'email' => 'logistik@santara.test', 'role' => 'koordinator_logistik', 'position' => 'Koordinator Logistik'],
             ['name' => 'Ahmad Santri', 'email' => 'pelapor@santara.test', 'role' => 'pelapor', 'position' => 'Santri'],
+            // Akun penangan umum (sebelumnya role `petugas`) dulu ikut menerima laporan
+            // logistik. Sekarang hanya koordinator yang ditunjuk sistem (`assigned_to`)
+            // yang memegang alur penanganan, jadi akun ini tidak didaftarkan lagi.
+            // Tetap divalidasi policy bila nantinya dibuat ulang sebagai koordinator.
         ];
+
+        // Akun lama tanpa pemakaian data apa pun boleh dibersihkan (idempoten saat seed ulang).
+        User::where('email', 'petugas@santara.test')
+            ->whereDoesntHave('complaints')
+            ->whereDoesntHave('assignedComplaints')
+            ->whereDoesntHave('assignments')
+            ->whereDoesntHave('handlingLogs')
+            ->delete();
 
         foreach ($users as $data) {
             User::updateOrCreate(
@@ -35,14 +47,21 @@ class SantaraSeeder extends Seeder
             );
         }
 
+        // Peta kategori -> divisi koordinator penerima laporan.
+        //   sarana & prasarana -> Koordinator Logistik
+        //   keamanan           -> Koordinator Keamanan
+        // Kategori "Kerusakan Fasilitas" = sarana & prasarana (tidak sensitif) sekaligus
+        // kategori umum bawaan aplikasi.
         $categories = [
             'Kerusakan Fasilitas' => 'koordinator_logistik',
+            'Sarana dan Prasarana' => 'koordinator_logistik',
             'Kerusakan Elektronik' => 'koordinator_logistik',
             'Kebersihan' => 'koordinator_logistik',
             'Sanitasi' => 'koordinator_logistik',
             'Kelistrikan' => 'koordinator_logistik',
             'Air dan Plumbing' => 'koordinator_logistik',
             'Perabot' => 'koordinator_logistik',
+            'Keamanan' => 'koordinator_keamanan',
             'Keamanan Fasilitas' => 'koordinator_keamanan',
             'Lainnya' => null,
         ];

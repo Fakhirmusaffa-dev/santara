@@ -28,16 +28,22 @@ Thumbs.db
 
 .mcp.json
 
-# Temporary QA and debug files
+# Temporary QA, debug and screenshot artifacts
 qa-*
 debug-*
 audit-crud.php
 triase-*
+*-qa.png
 landing-qa.png
 liquid-before-*.png
 tampilan-login.png
 storage/qa-*
 storage/lapor-mobile.png
 storage/probe.js
+storage/logs/diagnostic.txt
 
-triase.png
+# Root-level screenshots produced during manual QA
+/*.png
+
+# Playwright scripts run from root
+/*.mjs

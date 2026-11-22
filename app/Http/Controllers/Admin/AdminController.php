@@ -9,6 +9,7 @@ use App\Models\Complaint;
 use App\Models\Location;
 use App\Models\User;
 use App\Services\ActivityLogger;
+use App\Services\ComplaintRouter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -170,9 +171,17 @@ class AdminController extends Controller
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.$request->get('search').'%'))
             ->orderBy('name')->paginate(12)->withQueryString();
 
+        // Koordinator aktif per divisi, untuk ditampilkan pada opsi "diteruskan ke".
+        $koordinators = User::whereIn('role', User::KOORDINATOR_ROLES)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'role'])
+            ->groupBy('role');
+
         return view('admin.categories.index', [
             'categories' => $categories,
             'filters' => $request->only(['search']),
+            'koordinators' => $koordinators,
         ]);
     }
 
@@ -190,7 +199,8 @@ class AdminController extends Controller
             'slug' => Str::slug($validated['name']),
             'description' => $validated['description'] ?? null,
             'is_sensitive' => $request->boolean('is_sensitive'),
-            'koordinator_role' => $validated['koordinator_role'] ?: null,
+            // Divisi penerima laporan (null = tetap lewat admin).
+            'koordinator_role' => ComplaintRouter::normalizeRole($validated['koordinator_role'] ?? null),
         ]);
 
         ActivityLogger::log('category_created', "Kategori {$validated['name']} dibuat", Category::class, $category->id, [], $request);
@@ -232,7 +242,7 @@ class AdminController extends Controller
             // Kategori bertanda ini membuat laporan otomatis sensitif & mendesak.
             'is_sensitive' => $request->boolean('is_sensitive'),
             // Divisi penerima laporan (null = tetap lewat admin).
-            'koordinator_role' => $validated['koordinator_role'] ?: null,
+            'koordinator_role' => ComplaintRouter::normalizeRole($validated['koordinator_role'] ?? null),
         ]);
 
         ActivityLogger::log('category_updated', "Kategori {$category->name} diperbarui", Category::class, $category->id, [], $request);

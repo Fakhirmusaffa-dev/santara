@@ -4,6 +4,24 @@
 @section('page-subtitle', $complaint->category?->name . ' · ' . $complaint->location?->name)
 
 @section('content')
+    @if (session('complaint_preview'))
+        @php($preview = session('complaint_preview'))
+        <div class="reveal mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm delay-20">
+            <p class="inline-flex items-center gap-2 font-semibold text-emerald-900">
+                <span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[11px] text-white">✓</span>
+                Laporan Anda tersimpan
+            </p>
+            <p class="mt-1 text-emerald-900/90">
+                <strong>{{ $preview['title'] }}</strong><br>
+                <span class="text-emerald-800/80">{{ $preview['category'] ?? '—' }} · {{ $preview['location'] ?? '—' }}</span><br>
+                Status: <strong>{{ $preview['status'] }}</strong>
+                @if ($preview['routed_to'])
+                    · diteruskan ke <strong>{{ $preview['routed_to'] }}</strong>
+                @endif
+            </p>
+        </div>
+    @endif
+
     <div class="reveal flex flex-wrap items-center gap-2 delay-20">
         <x-status :status="$complaint->status" />
         <x-priority :priority="$complaint->priority" />
@@ -218,8 +236,8 @@
                             @csrf
                             <select name="assigned_to" required
                                 class="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-sm">
-                                <option value="">— Pilih petugas —</option>
-                                @foreach (\App\Models\User::where('role', 'petugas')->where('is_active', true)->orderBy('name')->get() as $p)
+                                <option value="">— Pilih koordinator —</option>
+                                @foreach (\App\Models\User::whereIn('role', \App\Models\User::KOORDINATOR_ROLES)->where('is_active', true)->orderBy('name')->get() as $p)
                                     <option value="{{ $p->id }}" @selected((int) $complaint->assigned_to === (int) $p->id)>{{ $p->name }}
                                     </option>
                                 @endforeach
@@ -261,7 +279,7 @@
                             {{ $h->created_at->format('d M Y H:i') }}</p>
                         @if (
                             $h->note &&
-                                (auth()->user()->isRole('admin', 'petugas', 'pimpinan') || (int) $complaint->user_id === (int) auth()->id()))
+                                (auth()->user()->isRole('admin', 'pimpinan') || auth()->user()->isKoordinator() || (int) $complaint->user_id === (int) auth()->id()))
                             <p class="mt-1 leading-relaxed text-slate-600">{{ $h->note }}</p>
                         @endif
                     </div>

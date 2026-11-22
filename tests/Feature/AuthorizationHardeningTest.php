@@ -34,7 +34,8 @@ class AuthorizationHardeningTest extends TestCase
         $this->seed(SantaraSeeder::class);
 
         $this->pelapor = User::where('email', 'pelapor@santara.test')->firstOrFail();
-        $this->petugas = User::where('email', 'petugas@santara.test')->firstOrFail();
+        // Penangan = Koordinator Logistik (penerima otomatis laporan divisi logistik).
+        $this->petugas = User::where('email', 'logistik@santara.test')->firstOrFail();
         $this->admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $this->pimpinan = User::where('email', 'pimpinan@santara.test')->firstOrFail();
     }

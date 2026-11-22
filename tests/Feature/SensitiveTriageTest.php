@@ -22,12 +22,13 @@ class SensitiveTriageTest extends TestCase
         $pelapor = User::where('email', 'pelapor@santara.test')->firstOrFail();
         $admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $pimpinan = User::where('email', 'pimpinan@santara.test')->firstOrFail();
-        $petugas = User::where('email', 'petugas@santara.test')->firstOrFail();
+        $koordinator = User::where('email', 'logistik@santara.test')->firstOrFail();
 
         // 1. Santri lapor sensitif. Klasifikasi TIDAK dipilih pelapor: sistem yang
         //    menetapkan karena isinya menyangkut kekerasan (kata kunci berisiko).
+        //    Kategori tanpa koordinator dipakai agar alurnya tetap "buta" ke admin.
         $this->actingAs($pelapor)->post(route('complaints.store'), [
-            'category_id' => Category::first()->id,
+            'category_id' => Category::whereNull('koordinator_role')->firstOrFail()->id,
             'location_id' => Location::first()->id,
             'title' => 'Judul rahasia yang tidak boleh bocor',
             'description' => 'Isi sangat rahasia tentang ancaman kekerasan yang tidak boleh tampil di antrean mana pun.',
@@ -44,7 +45,9 @@ class SensitiveTriageTest extends TestCase
 
         // 3. Laporan sensitif TIDAK muncul di daftar umum siapa pun
         // (tabel daftar; toast sukses boleh menyebut tiket — itu milik sesi sendiri).
-        foreach ([$admin, $pimpinan, $petugas] as $u) {
+        // Yang diperiksa hanya daftar admin, pimpinan, dan koordinator divisi terkait.
+        $koordinator = User::where('email', 'logistik@santara.test')->firstOrFail();
+        foreach ([$admin, $pimpinan, $koordinator] as $u) {
             $page = $this->actingAs($u)->get(route('complaints.index'))->assertOk();
             $page->assertDontSee('Judul rahasia');
             $page->assertDontSee('Isi sangat rahasia');
@@ -66,10 +69,11 @@ class SensitiveTriageTest extends TestCase
         // 5. Sebelum ambil alih: verify/assign/edit/hapus sensitif wajib 403.
         $this->actingAs($admin)->post(route('complaints.verify', $complaint))->assertForbidden();
         $this->actingAs($admin)->post(route('complaints.assign', $complaint), [
-            'assigned_to' => $petugas->id,
+            'assigned_to' => $koordinator->id,
             'instruction' => 'Instruksi yang cukup panjang untuk lolos validasi.',
         ])->assertForbidden();
-        $this->actingAs($admin)->get(route('complaints.show', $complaint))->assertForbidden();
+        // Halaman detail disamarkan sebagai 404, bukan 403 (tidak membocorkan tiket).
+        $this->actingAs($admin)->get(route('complaints.show', $complaint))->assertNotFound();
 
         // 6. Admin ambil alih dari triase -> tercatat, lalu bisa buka isi.
         $this->actingAs($admin)->post(route('complaints.grant-access', $complaint), [
@@ -87,13 +91,19 @@ class SensitiveTriageTest extends TestCase
         ])->assertRedirect();
         $this->actingAs($pimpinan)->get(route('complaints.show', $complaint))->assertOk();
 
-        // 8. Alur normal berlanjut: verifikasi -> tugaskan -> petugas bisa kerja.
+        // 8. Alur normal berlanjut: verifikasi lalu tugaskan ke koordinator penangan
+        //    yang diberi akses eksplisit.
+        $pendamping = User::where('email', 'logistik@santara.test')->firstOrFail();
         $this->actingAs($admin)->post(route('complaints.verify', $complaint), ['verification_note' => 'Valid.'])->assertRedirect();
+        $this->actingAs($admin)->post(route('complaints.grant-access', $complaint), [
+            'user_id' => $pendamping->id,
+            'reason' => 'Petugas pendamping ditunjuk menangani laporan ini.',
+        ])->assertRedirect();
         $this->actingAs($admin)->post(route('complaints.assign', $complaint), [
-            'assigned_to' => $petugas->id,
+            'assigned_to' => $pendamping->id,
             'instruction' => 'Tangani dengan hati-hati dan jaga kerahasiaan.',
         ])->assertRedirect();
         $this->assertEquals('ditugaskan', $complaint->fresh()->status);
-        $this->actingAs($petugas)->get(route('complaints.show', $complaint))->assertOk();
+        $this->actingAs($pendamping)->get(route('complaints.show', $complaint))->assertOk();
     }
 }

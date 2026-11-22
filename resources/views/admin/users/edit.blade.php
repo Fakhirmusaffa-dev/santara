@@ -20,7 +20,8 @@
             <div><label class="text-sm font-medium">Role *</label>
                 <select name="role" required @disabled((int) $user->id === (int) auth()->id())
                     class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                    @foreach (['pelapor' => 'Pelapor', 'petugas' => 'Petugas', 'admin' => 'Admin', 'pimpinan' => 'Pimpinan'] as $v => $l)
+                    @foreach (\App\Models\User::STAFF_ROLES as $v)
+                        @php($l = \App\Models\User::ROLE_LABELS[$v])
                         <option value="{{ $v }}" @selected(old('role', $user->role) === $v)>{{ $l }}</option>
                     @endforeach
                 </select>

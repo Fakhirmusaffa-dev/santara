@@ -21,7 +21,7 @@ class SchoolReadinessTest extends TestCase
 
     protected User $pelapor;
 
-    protected User $petugas;
+    protected User $logistik;
 
     protected User $admin;
 
@@ -34,7 +34,7 @@ class SchoolReadinessTest extends TestCase
         $this->seed(SantaraSeeder::class);
 
         $this->pelapor = User::where('email', 'pelapor@santara.test')->firstOrFail();
-        $this->petugas = User::where('email', 'petugas@santara.test')->firstOrFail();
+        $this->logistik = User::where('email', 'logistik@santara.test')->firstOrFail();
         $this->admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $this->pimpinan = User::where('email', 'pimpinan@santara.test')->firstOrFail();
     }
@@ -42,7 +42,7 @@ class SchoolReadinessTest extends TestCase
     public function test_semua_dashboard_bisa_dibuka(): void
     {
         $this->actingAs($this->pelapor)->get(route('pelapor.dashboard'))->assertOk();
-        $this->actingAs($this->petugas)->get(route('petugas.dashboard'))->assertOk();
+        $this->actingAs($this->logistik)->get(route('koordinator.dashboard'))->assertOk();
         $this->actingAs($this->admin)->get(route('admin.dashboard'))->assertOk();
         $this->actingAs($this->pimpinan)->get(route('pimpinan.dashboard'))->assertOk();
     }
@@ -61,26 +61,20 @@ class SchoolReadinessTest extends TestCase
             'photos' => [$foto],
         ])->assertRedirect();
         $complaint = Complaint::latest()->firstOrFail();
-        $this->assertEquals('menunggu_verifikasi', $complaint->status);
+        // Kategori sarana & prasarana otomatis diteruskan ke Koordinator Logistik.
+        $this->assertEquals('ditugaskan', $complaint->status);
         $this->assertCount(1, $complaint->photos);
 
         // Lampiran bisa diunduh pelapor.
         $this->actingAs($this->pelapor)->get(route('attachments.show', $complaint->photos->first()))->assertOk();
 
-        // 2. Admin verifikasi + tugaskan ke petugas (+konflik kepentingan dicegah).
-        $this->actingAs($this->admin)->post(route('complaints.verify', $complaint), ['verification_note' => 'Valid, segera tangani.'])->assertRedirect();
-        $this->assertEquals('terverifikasi', $complaint->fresh()->status);
+        // 2. Laporan sudah otomatis di tangan Koordinator Logistik — tanpa verifikasi manual.
+        $this->assertEquals($this->logistik->id, $complaint->fresh()->assigned_to);
 
-        $this->actingAs($this->admin)->post(route('complaints.assign', $complaint), [
-            'assigned_to' => $this->petugas->id,
-            'instruction' => 'Ganti keran wastafel asrama putra blok A hari ini juga.',
-        ])->assertRedirect();
-        $this->assertEquals('ditugaskan', $complaint->fresh()->status);
-
-        // 3. Petugas terima + catat progres + dokumentasi + ajukan selesai.
-        $this->actingAs($this->petugas)->post(route('complaints.accept', $complaint))->assertRedirect();
+        // 3. Koordinator terima + catat progres + dokumentasi + ajukan selesai.
+        $this->actingAs($this->logistik)->post(route('complaints.accept', $complaint))->assertRedirect();
         $bukti = UploadedFile::fake()->image('sesudah.jpg', 800, 600);
-        $this->actingAs($this->petugas)->post(route('complaints.handling', $complaint), [
+        $this->actingAs($this->logistik)->post(route('complaints.handling', $complaint), [
             'title' => 'Penggantian keran',
             'note' => 'Keran lama dilepas, keran baru dipasang dan sudah dites tidak bocor.',
             'progress' => 100,
@@ -89,7 +83,7 @@ class SchoolReadinessTest extends TestCase
         $this->assertEquals('sedang_ditangani', $complaint->fresh()->status);
         $this->assertNotNull($complaint->fresh()->handlingLogs()->first()->photo_path);
 
-        $this->actingAs($this->petugas)->post(route('complaints.complete', $complaint), [
+        $this->actingAs($this->logistik)->post(route('complaints.complete', $complaint), [
             'summary' => 'Keran sudah diganti dan lantai sudah dikeringkan.',
         ])->assertRedirect();
         $this->assertEquals('menunggu_pemeriksaan', $complaint->fresh()->status);
@@ -129,7 +123,7 @@ class SchoolReadinessTest extends TestCase
         $this->actingAs($this->pelapor)->get(route('reports.index'))->assertForbidden();
     }
 
-    public function test_petugas_hanya_melihat_tugasnya_dan_akses_ditolak_dengan_403(): void
+    public function test_koordinator_hanya_melihat_tugasnya_dan_akses_ditolak_dengan_403(): void
     {
         $milik = Complaint::create([
             'ticket_number' => 'STR-TUGAS-001',
@@ -140,7 +134,7 @@ class SchoolReadinessTest extends TestCase
             'priority' => 'sedang',
             'sensitivity' => 'biasa',
             'status' => 'ditugaskan',
-            'assigned_to' => $this->petugas->id,
+            'assigned_to' => $this->logistik->id,
         ]);
         $lain = Complaint::create([
             'ticket_number' => 'STR-LAIN-001',
@@ -153,10 +147,11 @@ class SchoolReadinessTest extends TestCase
             'status' => 'terverifikasi',
         ]);
 
-        $this->actingAs($this->petugas)->get(route('complaints.show', $milik))->assertOk();
-        $this->actingAs($this->petugas)->get(route('complaints.show', $lain))->assertForbidden();
+        $this->actingAs($this->logistik)->get(route('complaints.show', $milik))->assertOk();
+        // Penyamaran sumber daya: 404, bukan 403 yang membocorkan keberadaan tiket.
+        $this->actingAs($this->logistik)->get(route('complaints.show', $lain))->assertNotFound();
         // Ubah status ilegal langsung via POST juga ditolak sesuai policy (403), bukan 500.
-        $this->actingAs($this->petugas)->post(route('complaints.status', $lain), ['to_status' => 'selesai'])->assertForbidden();
+        $this->actingAs($this->logistik)->post(route('complaints.status', $lain), ['to_status' => 'selesai'])->assertForbidden();
     }
 
     public function test_laporan_sensitif_tetap_terisolasi_ujung_ke_ujung(): void
@@ -175,10 +170,10 @@ class SchoolReadinessTest extends TestCase
         $this->assertSame('sensitif', $complaint->sensitivity);
         $foto = $complaint->photos()->firstOrFail();
 
-        // Admin & pimpinan tanpa akses: halaman + file sama-sama 403.
-        $this->actingAs($this->admin)->get(route('complaints.show', $complaint))->assertForbidden();
+        // Admin & pimpinan tanpa akses: halaman (404, disamarkan) + file (403) ditolak.
+        $this->actingAs($this->admin)->get(route('complaints.show', $complaint))->assertNotFound();
         $this->actingAs($this->admin)->get(route('attachments.show', $foto))->assertForbidden();
-        $this->actingAs($this->pimpinan)->get(route('complaints.show', $complaint))->assertForbidden();
+        $this->actingAs($this->pimpinan)->get(route('complaints.show', $complaint))->assertNotFound();
 
         // Admin memberi akses ke pimpinan -> keduanya bisa buka halaman + file.
         $this->actingAs($this->admin)->post(route('complaints.grant-access', $complaint), [

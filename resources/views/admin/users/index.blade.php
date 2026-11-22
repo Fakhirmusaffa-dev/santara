@@ -11,8 +11,8 @@
                     class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm">
                 <select name="role" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
                     <option value="">Semua role</option>
-                    @foreach (['pelapor', 'petugas', 'admin', 'pimpinan'] as $r)
-                        <option value="{{ $r }}" @selected(($filters['role'] ?? '') === $r)>{{ ucfirst($r) }}</option>
+                    @foreach (\App\Models\User::ROLES as $r)
+                        <option value="{{ $r }}" @selected(($filters['role'] ?? '') === $r)>{{ \App\Models\User::ROLE_LABELS[$r] }}</option>
                     @endforeach
                 </select>
                 <button class="rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white">Cari</button>

@@ -95,8 +95,12 @@ class ApprovalController extends Controller
         ]);
 
         $target = User::findOrFail($validated['user_id']);
-        if (! in_array($target->role, ['admin', 'pimpinan'], true)) {
-            return back()->withErrors(['user_id' => 'Akses sensitif hanya untuk admin/pimpinan yang ditunjuk.']);
+        // Admin/pimpinan (pengawasan) atau koordinator penangan (need-to-know).
+        if (! $target->is_active) {
+            return back()->withErrors(['user_id' => 'Akun tujuan tidak aktif.']);
+        }
+        if (! $target->isRole('admin', 'pimpinan') && ! $target->isKoordinator()) {
+            return back()->withErrors(['user_id' => 'Akses sensitif hanya untuk admin, pimpinan, atau koordinator penangan.']);
         }
         if ((int) $target->id === (int) $complaint->user_id) {
             return back()->withErrors(['user_id' => 'Pelapor sudah memiliki akses.']);

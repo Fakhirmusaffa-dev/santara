@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\Complaint;
 use App\Models\Location;
 use App\Models\User;
+use Database\Seeders\SantaraSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -15,7 +17,7 @@ class CrudAuditTest extends TestCase
     public function test_admin_crud_pages_render(): void
     {
         $this->withoutVite();
-        $this->seed(\Database\Seeders\SantaraSeeder::class);
+        $this->seed(SantaraSeeder::class);
         $admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $cat = Category::firstOrFail();
         $loc = Location::firstOrFail();
@@ -42,28 +44,28 @@ class CrudAuditTest extends TestCase
     public function test_admin_can_update_and_delete_master_data(): void
     {
         $this->withoutVite();
-        $this->seed(\Database\Seeders\SantaraSeeder::class);
+        $this->seed(SantaraSeeder::class);
         $admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $cat = Category::firstOrFail();
         $loc = Location::firstOrFail();
 
         // Update kategori
         $this->actingAs($admin)->put(route('admin.categories.update', $cat), [
-            'name' => $cat->name . ' Revisi',
+            'name' => $cat->name.' Revisi',
             'description' => 'Uji ubah.',
             'is_active' => '1',
         ])->assertRedirect(route('admin.categories.show', $cat));
-        $this->assertDatabaseHas('categories', ['id' => $cat->id, 'name' => $cat->name . ' Revisi']);
+        $this->assertDatabaseHas('categories', ['id' => $cat->id, 'name' => $cat->name.' Revisi']);
 
         // Update lokasi
         $this->actingAs($admin)->put(route('admin.locations.update', $loc), [
-            'name' => $loc->name . ' Revisi',
+            'name' => $loc->name.' Revisi',
             'code' => $loc->code,
             'area' => $loc->area,
             'description' => 'Uji ubah.',
             'is_active' => '1',
         ])->assertRedirect(route('admin.locations.show', $loc));
-        $this->assertDatabaseHas('locations', ['id' => $loc->id, 'name' => $loc->name . ' Revisi']);
+        $this->assertDatabaseHas('locations', ['id' => $loc->id, 'name' => $loc->name.' Revisi']);
 
         // Hapus kategori & lokasi yang tidak dipakai
         $baru = Category::create(['name' => 'Kategori Buang', 'slug' => 'kategori-buang']);
@@ -90,7 +92,7 @@ class CrudAuditTest extends TestCase
     public function test_admin_can_update_and_delete_user_and_complaint(): void
     {
         $this->withoutVite();
-        $this->seed(\Database\Seeders\SantaraSeeder::class);
+        $this->seed(SantaraSeeder::class);
         $admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $pelapor = User::where('email', 'pelapor@santara.test')->firstOrFail();
 
@@ -98,12 +100,12 @@ class CrudAuditTest extends TestCase
         $this->actingAs($admin)->put(route('admin.users.update', $pelapor), [
             'name' => 'Ahmad Revisi',
             'email' => 'pelapor@santara.test',
-            'role' => 'petugas',
-            'position' => 'Petugas',
+            'role' => 'koordinator_logistik',
+            'position' => 'Koordinator Logistik',
             'phone' => '0812',
             'is_active' => '1',
         ])->assertRedirect(route('admin.users.show', $pelapor));
-        $this->assertDatabaseHas('users', ['id' => $pelapor->id, 'name' => 'Ahmad Revisi', 'role' => 'petugas']);
+        $this->assertDatabaseHas('users', ['id' => $pelapor->id, 'name' => 'Ahmad Revisi', 'role' => 'koordinator_logistik']);
 
         // Hapus user yang tidak dipakai
         $kosong = User::create(['name' => 'Buang', 'email' => 'buang@santara.test', 'password' => 'password123', 'role' => 'pelapor', 'is_active' => true]);
@@ -119,7 +121,7 @@ class CrudAuditTest extends TestCase
             'priority' => 'tinggi',
             'sensitivity' => 'biasa',
         ])->assertRedirect();
-        $complaint = \App\Models\Complaint::latest()->firstOrFail();
+        $complaint = Complaint::latest()->firstOrFail();
         $this->actingAs($admin)->delete(route('complaints.destroy', $complaint))->assertRedirect(route('complaints.index'));
         $this->assertSoftDeleted('complaints', ['id' => $complaint->id]);
     }

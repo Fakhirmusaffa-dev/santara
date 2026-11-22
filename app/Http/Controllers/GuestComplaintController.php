@@ -6,7 +6,6 @@ use App\Models\Category;
 use App\Models\Complaint;
 use App\Models\ComplaintStatusHistory;
 use App\Models\Location;
-use App\Models\User;
 use App\Notifications\GenericAnnouncement;
 use App\Services\ActivityLogger;
 use App\Services\ComplaintClassifier;
@@ -53,15 +52,16 @@ class GuestComplaintController extends Controller
         $validated['sensitivity'] = $classification['sensitivity'];
         $validated['priority'] = $classification['priority'];
 
-        // Arahkan langsung ke koordinator divisi kategorinya. Bila kotak hapus
-        // koordinator terisi, status langsung 'ditugaskan' (melewati verifikasi admin);
-        // bila tidak ada koordinator, tetap 'menunggu_verifikasi' untuk admin.
+        // Arahkan langsung ke koordinator divisi kategorinya. Bila ada koordinator
+        // aktif, status langsung 'ditugaskan' (melewati verifikasi admin); bila tidak
+        // ada koordinator, tetap 'menunggu_verifikasi' untuk admin.
+        $router = app(ComplaintRouter::class);
         $koordinatorRole = ComplaintRouter::roleForCategoryId((int) $validated['category_id']);
-        $koordinator = $koordinatorRole ? User::koordinatorFor($koordinatorRole)->first() : null;
+        $koordinators = $router->recipientsForRole($koordinatorRole);
 
-        $statusAwal = $koordinator ? 'ditugaskan' : 'menunggu_verifikasi';
+        $statusAwal = $koordinators->isNotEmpty() ? 'ditugaskan' : 'menunggu_verifikasi';
 
-        $complaint = DB::transaction(function () use ($request, $validated, $koordinator, $statusAwal) {
+        $complaint = DB::transaction(function () use ($request, $validated, $koordinators, $statusAwal) {
             $complaint = Complaint::create([
                 'ticket_number' => $this->generateTicketNumber(),
                 'user_id' => null,
@@ -74,15 +74,16 @@ class GuestComplaintController extends Controller
                 'priority' => $validated['priority'],
                 'sensitivity' => $validated['sensitivity'],
                 'status' => $statusAwal,
-                'assigned_to' => $koordinator?->id,
+                'assigned_to' => $koordinators->first()?->id,
             ]);
 
             $this->storePhotos($request, $complaint);
 
-            // Jejak penugasan otomatis supaya "Tugas Saya" koordinator terisi.
-            if ($koordinator) {
+            // Jejak penugasan otomatis untuk setiap koordinator divisi, supaya
+            // "Tugas Saya" masing-masing koordinator terisi.
+            foreach ($koordinators as $penerima) {
                 $complaint->assignments()->create([
-                    'assigned_to' => $koordinator->id,
+                    'assigned_to' => $penerima->id,
                     'assigned_by' => null,
                     'instruction' => 'Ditugaskan otomatis oleh sistem berdasarkan kategori laporan.',
                     'status' => 'baru',
@@ -94,8 +95,8 @@ class GuestComplaintController extends Controller
                 'from_status' => null,
                 'to_status' => $statusAwal,
                 'changed_by' => null,
-                'note' => $koordinator
-                    ? "Laporan dibuat tanpa akun dan otomatis diteruskan ke {$koordinator->roleLabel()}."
+                'note' => $koordinators->isNotEmpty()
+                    ? 'Laporan dibuat tanpa akun dan otomatis diteruskan ke '.$koordinators->first()->roleLabel().'.'
                     : 'Laporan dibuat tanpa akun.',
             ]);
 
@@ -107,11 +108,8 @@ class GuestComplaintController extends Controller
         });
 
         // ---- Distribusi notifikasi ----
-        // Laporan yang punya koordinator TIDAK lagi dibroadcast ke semua admin:
-        // hanya koordinator divisinya yang ditegur, plus admin sebagai tembusan
-        // pengawasan (metadata saja, tanpa isi).
-        $koordinators = $koordinator ? collect([$koordinator]) : collect();
-
+        // Penerima utama: koordinator divisi kategorinya. Admin & pimpinan
+        // mendapat tembusan pengawasan (metadata saja untuk laporan sensitif).
         foreach ($koordinators as $k) {
             Notify::send(
                 $k,
@@ -125,39 +123,49 @@ class GuestComplaintController extends Controller
         }
 
         // Tembusan pengawasan untuk admin & pimpinan.
-        $watchers = User::where('is_active', true)->whereIn('role', ['admin', 'pimpinan'])->get();
-        foreach ($watchers as $watcher) {
-            Notify::send(
-                $watcher,
-                new GenericAnnouncement(
-                    'Laporan baru masuk',
-                    $koordinator
-                        ? "Tiket {$complaint->ticket_number} diteruskan ke {$koordinator->roleLabel()}."
-                        : "Laporan baru {$complaint->ticket_number} dari tamu menunggu verifikasi.",
-                    $koordinator ? route('admin.monitoring') : route('complaints.show', $complaint),
-                    $complaint->ticket_number
-                )
-            );
-        }
-
-        // Triase buta: laporan sensitif TANPA koordinator tetap butuh penunjukan admin.
-        if ($complaint->sensitivity === 'sensitif' && ! $koordinator) {
-            $admins = User::where('role', 'admin')->where('is_active', true)->get();
-            foreach ($admins as $admin) {
-                Notify::send(
-                    $admin,
-                    new GenericAnnouncement(
-                        'Laporan sensitif masuk',
-                        "Tiket {$complaint->ticket_number} membutuhkan penunjukan penangan di Sensitif Masuk.",
-                        route('admin.sensitive.index'),
-                        $complaint->ticket_number
-                    )
-                );
-            }
-        }
+        $this->notifyWatchers($complaint, $koordinators->isNotEmpty());
 
         return back()->with('guest_ticket', $complaint->ticket_number)
             ->with('success', "Laporan {$complaint->ticket_number} berhasil dikirim. Simpan nomor tiket ini untuk mengecek status laporan.");
+    }
+
+    /**
+     * Tembusan pengawasan untuk admin & pimpinan agar bisa mengecek dan
+     * mengoordinasi laporan. Untuk laporan sensitif, isi tetap tidak bocor:
+     * admin diarahkan ke triase buta, pimpinan ke halaman monitoring.
+     */
+    protected function notifyWatchers(Complaint $complaint, bool $routed): void
+    {
+        $sensitif = $complaint->sensitivity === 'sensitif';
+
+        foreach (app(ComplaintRouter::class)->watchers() as $watcher) {
+            [$title, $message, $url] = match (true) {
+                $sensitif && $watcher->isRole('admin') => [
+                    'Laporan sensitif masuk',
+                    "Tiket {$complaint->ticket_number} membutuhkan penunjukan penangan di Sensitif Masuk.",
+                    route('admin.sensitive.index'),
+                ],
+                $sensitif => [
+                    'Laporan baru masuk',
+                    "Tiket {$complaint->ticket_number} tercatat untuk dipantau.",
+                    route('admin.monitoring'),
+                ],
+                default => [
+                    'Laporan baru masuk',
+                    $routed
+                        ? "Tiket {$complaint->ticket_number} diteruskan ke koordinator divisinya."
+                        : "Laporan baru {$complaint->ticket_number} dari tamu menunggu verifikasi.",
+                    $routed ? route('admin.monitoring') : route('complaints.show', $complaint),
+                ],
+            };
+
+            Notify::send($watcher, new GenericAnnouncement(
+                $title,
+                $message,
+                $url,
+                $complaint->ticket_number
+            ));
+        }
     }
 
     /** Tamu: cek status laporan lewat nomor tiket. */

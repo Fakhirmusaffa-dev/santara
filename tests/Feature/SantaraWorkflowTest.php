@@ -16,7 +16,9 @@ class SantaraWorkflowTest extends TestCase
 
     protected User $pelapor;
 
-    protected User $petugas;
+    protected User $logistik;
+
+    protected User $keamanan;
 
     protected User $admin;
 
@@ -30,7 +32,8 @@ class SantaraWorkflowTest extends TestCase
         $this->seed(SantaraSeeder::class);
 
         $this->pelapor = User::where('email', 'pelapor@santara.test')->firstOrFail();
-        $this->petugas = User::where('email', 'petugas@santara.test')->firstOrFail();
+        $this->logistik = User::where('email', 'logistik@santara.test')->firstOrFail();
+        $this->keamanan = User::where('email', 'keamanan@santara.test')->firstOrFail();
         $this->admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $this->pimpinan = User::where('email', 'pimpinan@santara.test')->firstOrFail();
     }
@@ -69,8 +72,8 @@ class SantaraWorkflowTest extends TestCase
     {
         $umum = Category::firstOrFail(); // kategori umum dari seeder
         $keamanan = Category::create([
-            'name' => 'Keamanan',
-            'slug' => 'keamanan',
+            'name' => 'Keamanan Uji',
+            'slug' => 'keamanan-uji',
             'is_active' => true,
             'is_sensitive' => true,
         ]);
@@ -132,7 +135,7 @@ class SantaraWorkflowTest extends TestCase
         foreach (
             [
                 [$this->pelapor, 'pelapor.dashboard'],
-                [$this->petugas, 'petugas.dashboard'],
+                [$this->logistik, 'koordinator.dashboard'],
                 [$this->admin, 'admin.dashboard'],
                 [$this->pimpinan, 'pimpinan.dashboard'],
             ] as [$user, $route]
@@ -163,7 +166,9 @@ class SantaraWorkflowTest extends TestCase
         $complaint = Complaint::firstOrFail();
         $response->assertRedirect(route('complaints.show', $complaint));
         $this->assertStringStartsWith('STR-', $complaint->ticket_number);
-        $this->assertEquals('menunggu_verifikasi', $complaint->status);
+        // Kategori sarana & prasarana langsung diteruskan ke Koordinator Logistik.
+        $this->assertEquals('ditugaskan', $complaint->status);
+        $this->assertNotNull($complaint->assigned_to);
 
         // Pelapor lain tidak boleh melihat (IDOR).
         $other = User::create([
@@ -173,13 +178,16 @@ class SantaraWorkflowTest extends TestCase
             'role' => 'pelapor',
             'is_active' => true,
         ]);
-        $this->actingAs($other)->get(route('complaints.show', $complaint))->assertForbidden();
+        // Penyamaran sumber daya: pelapor lain mendapat 404 (bukan petunjuk tiket ini ada).
+        $this->actingAs($other)->get(route('complaints.show', $complaint))->assertNotFound();
     }
 
     public function test_full_workflow_verify_assign_handle_complete_feedback(): void
     {
+        // Order default memakai slug, jadi pastikan targetnya kategori sarana & prasarana.
+        $sarana = Category::where('slug', 'kerusakan-fasilitas')->firstOrFail();
         $this->actingAs($this->pelapor)->post(route('complaints.store'), [
-            'category_id' => Category::first()->id,
+            'category_id' => $sarana->id,
             'location_id' => Location::first()->id,
             'title' => 'Lampu kelas mati total',
             'description' => 'Lampu ruang kelas 1 mati total sejak kemarin sore sehingga KBM terganggu.',
@@ -188,49 +196,47 @@ class SantaraWorkflowTest extends TestCase
         ]);
         $complaint = Complaint::firstOrFail();
 
-        // Verifikasi + tolak-butuh-alasan.
-        $this->actingAs($this->admin)
-            ->post(route('complaints.reject', $complaint), ['rejection_reason' => 'pendek'])
-            ->assertSessionHasErrors('rejection_reason');
+        // Laporan sudah otomatis di tangan Koordinator Logistik; admin tetap bisa
+        // mengubah status terkontrol (tidak ada verifikasi manual lagi).
+        $this->assertEquals('ditugaskan', $complaint->fresh()->status);
 
-        $this->actingAs($this->admin)
-            ->post(route('complaints.verify', $complaint), ['verification_note' => 'Valid.'])
-            ->assertSessionHasNoErrors();
-        $this->assertEquals('terverifikasi', $complaint->fresh()->status);
-
-        // Konflik kepentingan: petugas tidak boleh menangani laporannya sendiri.
-        $selfReport = Complaint::create([
-            'ticket_number' => 'STR-TEST-SELF',
-            'user_id' => $this->petugas->id,
-            'category_id' => Category::first()->id,
-            'title' => 'Uji konflik yang cukup panjang',
+        // Penugasan manual oleh admin ke koordinator aktif berjalan normal.
+        $sendiri = User::create([
+            'name' => 'Koordinator Mandiri',
+            'email' => 'mandiri@santara.test',
+            'password' => 'password',
+            'role' => 'koordinator_logistik',
+            'is_active' => true,
+        ]);
+        $siapTugaskan = Complaint::create([
+            'ticket_number' => 'STR-TEST-MANUAL',
+            'user_id' => $this->pelapor->id,
+            'category_id' => $sarana->id,
+            'title' => 'Penugasan manual oleh admin',
             'description' => 'Deskripsi yang cukup panjang untuk lolos validasi minimal dua puluh karakter.',
             'priority' => 'sedang',
             'sensitivity' => 'biasa',
             'status' => 'terverifikasi',
         ]);
-        $this->actingAs($this->admin)->post(route('complaints.assign', $selfReport), [
-            'assigned_to' => $this->petugas->id,
+        $this->actingAs($this->admin)->post(route('complaints.assign', $siapTugaskan), [
+            'assigned_to' => $sendiri->id,
             'instruction' => 'Instruksi penanganan yang jelas dan cukup panjang.',
-        ])->assertSessionHasErrors('assigned_to');
+        ])->assertRedirect();
+        $this->assertEquals($sendiri->id, $siapTugaskan->fresh()->assigned_to);
 
-        // Penugasan normal.
-        $this->actingAs($this->admin)->post(route('complaints.assign', $complaint), [
-            'assigned_to' => $this->petugas->id,
-            'instruction' => 'Periksa instalasi listrik kelas 1 dan ganti lampu yang rusak.',
-        ])->assertSessionHasNoErrors();
-        $this->assertEquals('ditugaskan', $complaint->fresh()->status);
-
-        // Petugas progres + ajukan selesai.
-        $this->actingAs($this->petugas)->post(route('complaints.accept', $complaint))->assertSessionHasNoErrors();
-        $this->actingAs($this->petugas)->post(route('complaints.handling', $complaint), [
+        // Koordinator Logistik (penerima otomatis) menerima tugas, mencatat progres,
+        // lalu mengajukan penyelesaian.
+        $penangan = $this->logistik;
+        $this->actingAs($penangan)->post(route('complaints.accept', $complaint))->assertSessionHasNoErrors();
+        $this->actingAs($penangan)->post(route('complaints.handling', $complaint), [
             'title' => 'Penggantian lampu',
             'note' => 'Lampu diganti dan instalasi diperiksa, berfungsi normal.',
             'progress' => 80,
         ])->assertSessionHasNoErrors();
+        $this->assertSame($penangan->id, (int) $complaint->fresh()->assigned_to);
         $this->assertEquals('sedang_ditangani', $complaint->fresh()->status);
 
-        $this->actingAs($this->petugas)->post(route('complaints.complete', $complaint), [
+        $this->actingAs($penangan)->post(route('complaints.complete', $complaint), [
             'summary' => 'Semua lampu sudah menyala normal dan sudah diuji.',
         ])->assertSessionHasNoErrors();
         $this->assertEquals('menunggu_pemeriksaan', $complaint->fresh()->status);
@@ -268,17 +274,14 @@ class SantaraWorkflowTest extends TestCase
         ]);
         $complaint = Complaint::firstOrFail();
 
-        $this->actingAs($this->admin)->post(route('complaints.verify', $complaint), ['verification_note' => 'Valid.'])->assertSessionHasNoErrors();
-        $this->actingAs($this->admin)->post(route('complaints.assign', $complaint), [
-            'assigned_to' => $this->petugas->id,
-            'instruction' => 'Periksa kran yang rusak dan ganti bila perlu.',
-        ])->assertSessionHasNoErrors();
+        // Laporan otomatis ditugaskan; koordinator penerima langsung menerima.
         $this->assertEquals('ditugaskan', $complaint->fresh()->status);
-
-        $this->actingAs($this->petugas)->post(route('complaints.accept', $complaint))->assertSessionHasNoErrors();
+        $penerima = $complaint->fresh()->assignee;
+        $this->assertNotNull($penerima);
+        $this->actingAs($penerima)->post(route('complaints.accept', $complaint))->assertSessionHasNoErrors();
 
         // Pengajuan penyelesaian langsung dari 'ditugaskan' tidak boleh melempar InvalidArgumentException.
-        $this->actingAs($this->petugas)->post(route('complaints.complete', $complaint), [
+        $this->actingAs($penerima)->post(route('complaints.complete', $complaint), [
             'summary' => 'Kran sudah diganti dan tidak ada kebocoran lagi.',
         ])->assertSessionHasNoErrors();
 
@@ -290,7 +293,7 @@ class SantaraWorkflowTest extends TestCase
         ]);
         $this->assertDatabaseHas('assignments', [
             'complaint_id' => $complaint->id,
-            'assigned_to' => $this->petugas->id,
+            'assigned_to' => $penerima->id,
             'status' => 'selesai',
         ]);
     }
@@ -308,10 +311,10 @@ class SantaraWorkflowTest extends TestCase
         // Sistem (bukan pelapor) yang menetapkan sensitif berdasarkan isi laporan.
         $this->assertSame('sensitif', $complaint->sensitivity);
 
-        // Admin tanpa akses eksplisit: ditolak.
-        $this->actingAs($this->admin)->get(route('complaints.show', $complaint))->assertForbidden();
+        // Admin tanpa akses eksplisit: ditolak (404 agar keberadaan tiket tidak terbocor).
+        $this->actingAs($this->admin)->get(route('complaints.show', $complaint))->assertNotFound();
         // Pimpinan tanpa akses eksplisit: ditolak.
-        $this->actingAs($this->pimpinan)->get(route('complaints.show', $complaint))->assertForbidden();
+        $this->actingAs($this->pimpinan)->get(route('complaints.show', $complaint))->assertNotFound();
 
         // Admin memberi akses ke pimpinan.
         $this->actingAs($this->admin)->post(route('complaints.grant-access', $complaint), [
@@ -320,6 +323,66 @@ class SantaraWorkflowTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->actingAs($this->pimpinan)->get(route('complaints.show', $complaint))->assertOk();
+    }
+
+    public function test_laporan_dikirim_ke_koordinator_sesuai_kategori(): void
+    {
+        // Bersihkan notifikasi bawaan agar hitungan murni milik laporan ini.
+        User::query()->each(fn (User $u) => $u->notifications()->delete());
+
+        // Sarana & prasarana -> Koordinator Logistik.
+        $this->actingAs($this->pelapor)->post(route('complaints.store'), [
+            'category_id' => Category::where('koordinator_role', 'koordinator_logistik')->firstOrFail()->id,
+            'location_id' => Location::first()->id,
+            'title' => 'Bangku kelas rusak parah',
+            'description' => 'Dua bangku di ruang kelas 1 patah sehingga santri harus duduk di lantai.',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $sarana = Complaint::latest('id')->firstOrFail();
+
+        $this->assertEquals('ditugaskan', $sarana->status);
+        $this->assertEquals($this->logistik->id, $sarana->assigned_to);
+        $this->assertEquals(1, $this->logistik->notifications()->count());
+        $this->assertEquals(0, $this->keamanan->notifications()->count());
+
+        // Tembusan pengawasan: admin & pimpinan diberi tahu agar bisa memantau.
+        $this->assertEquals(1, $this->admin->notifications()->count());
+        $this->assertEquals(1, $this->pimpinan->notifications()->count());
+        $this->assertEquals(route('admin.monitoring'), $this->admin->notifications()->latest()->first()->data['url']);
+
+        // Keamanan -> Koordinator Keamanan (bukan Logistik).
+        $this->actingAs($this->pelapor)->post(route('complaints.store'), [
+            'category_id' => Category::where('koordinator_role', 'koordinator_keamanan')->firstOrFail()->id,
+            'location_id' => Location::first()->id,
+            'title' => 'Perundungan di asrama putra blok B',
+            'description' => 'Seorang santri dipukul dan diintimidasi oleh kakak kelas secara berulang.',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $keamanan = Complaint::latest('id')->firstOrFail();
+
+        $this->assertEquals($this->keamanan->id, $keamanan->assigned_to);
+        $this->assertEquals(1, $this->keamanan->notifications()->count());
+        $this->actingAs($this->keamanan)->get(route('complaints.show', $keamanan))->assertOk();
+        // Koordinator divisi lain tidak boleh membaca laporan keamanan (404 = disamarkan).
+        $this->actingAs($this->logistik)->get(route('complaints.show', $keamanan))->assertNotFound();
+    }
+
+    public function test_laporan_tamu_dikirim_ke_koordinator_dan_admin_pimpinan(): void
+    {
+        $this->post(route('guest.complaints.store'), [
+            'category_id' => Category::where('koordinator_role', 'koordinator_logistik')->firstOrFail()->id,
+            'location_id' => Location::first()->id,
+            'title' => 'Keran kamar mandi putra bocor',
+            'description' => 'Air keran kamar mandi putra terus mengalir sehingga lantai becek seharian.',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $complaint = Complaint::firstOrFail();
+
+        $this->assertEquals('ditugaskan', $complaint->status);
+        $this->assertEquals($this->logistik->id, $complaint->assigned_to);
+        // Hanya satu koordinator divisi pada seeder ini; jangan sampai tergandakan.
+        $assignment = $complaint->assignments()->firstOrFail();
+        $this->assertEquals($this->logistik->id, $assignment->assigned_to);
+        $this->assertEquals(1, $this->logistik->notifications()->count());
+        $this->assertEquals(1, $this->admin->notifications()->count());
+        $this->assertEquals(1, $this->pimpinan->notifications()->count());
     }
 }
 

@@ -39,6 +39,12 @@ class ComplaintPolicy
             return true;
         }
 
+        // Admin & pimpinan dengan akses eksplisit boleh membaca laporan sensitif
+        // (diberikan lewat triase / permohonan akses) — tanpa akses, dilihat sebagai 404.
+        if ($complaint->isSensitive() && $this->viewSensitive($user, $complaint)) {
+            return true;
+        }
+
         if ($user->isKoordinator()) {
             if ((int) $complaint->assigned_to === (int) $user->id) {
                 return true;
