@@ -1,20 +1,19 @@
 @extends('layouts.app')
-@section('title', 'Dashboard Petugas')
+@section('title', 'Dashboard ' . auth()->user()->roleLabel())
 @section('page-title', 'Tugas Saya')
-@section('page-subtitle', 'Penugasan penanganan yang menjadi tanggung jawab Anda.')
-
+@section('page-subtitle', 'Laporan yang otomatis diteruskan ke divisi {{ auth()->user()->roleLabel() }}.')
 @section('content')
     <div class="reveal grid grid-cols-2 gap-4 delay-40 lg:grid-cols-4">
-        <x-stat title="Total Penugasan" :value="$total" accent="navy"
+        <x-stat title="Total Laporan" :value="$total" accent="navy"
             icon="M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
-        <x-stat title="Penugasan Baru" :value="$baru" hint="Perlu diterima" accent="gold"
+        <x-stat title="Belum Ditangani" :value="$baru" hint="Baru masuk" accent="gold"
             icon="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
         <x-stat title="Sedang Ditangani" :value="$ditangani" accent="slate" icon="M13 10V3L4 14h7v7l9-11h-7z" />
-        <x-stat title="Menunggu Pemeriksaan" :value="$pemeriksaan" hint="Diajukan selesai" accent="navy"
-            icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <x-stat title="Mendesak" :value="$mendesak" hint="Perlu didahulukan" accent="navy"
+            icon="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
     </div>
 
-    <x-card title="Daftar tugas terbaru" class="reveal mt-6 delay-120">
+    <x-card title="Laporan terbaru untuk divisi Anda" class="reveal mt-6 delay-120">
         <div class="-mx-2 overflow-x-auto px-2">
             <table class="w-full min-w-[640px] text-left text-sm">
                 <thead>
@@ -41,8 +40,8 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="py-6"><x-empty-state title="Tidak ada tugas"
-                                    hint="Penugasan baru dari admin akan tampil di sini." /></td>
+                            <td colspan="5" class="py-6"><x-empty-state title="Belum ada laporan"
+                                    hint="Laporan yang masuk ke divisi Anda akan otomatis tampil di sini." /></td>
                         </tr>
                     @endforelse
                 </tbody>

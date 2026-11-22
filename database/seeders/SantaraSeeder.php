@@ -16,8 +16,8 @@ class SantaraSeeder extends Seeder
         $users = [
             ['name' => 'Administrator', 'email' => 'admin@santara.test', 'role' => 'admin', 'position' => 'Admin SIT'],
             ['name' => 'Kepala Sekolah', 'email' => 'pimpinan@santara.test', 'role' => 'pimpinan', 'position' => 'Kepala Sekolah'],
-            ['name' => 'Budi Petugas', 'email' => 'petugas@santara.test', 'role' => 'petugas', 'position' => 'Petugas Sarpras'],
-            ['name' => 'Siti Petugas', 'email' => 'petugas2@santara.test', 'role' => 'petugas', 'position' => 'Petugas Kebersihan'],
+            ['name' => 'Koordinator Keamanan', 'email' => 'keamanan@santara.test', 'role' => 'koordinator_keamanan', 'position' => 'Koordinator Keamanan'],
+            ['name' => 'Koordinator Logistik', 'email' => 'logistik@santara.test', 'role' => 'koordinator_logistik', 'position' => 'Koordinator Logistik'],
             ['name' => 'Ahmad Santri', 'email' => 'pelapor@santara.test', 'role' => 'pelapor', 'position' => 'Santri'],
         ];
 
@@ -36,21 +36,27 @@ class SantaraSeeder extends Seeder
         }
 
         $categories = [
-            'Kerusakan Fasilitas',
-            'Kerusakan Elektronik',
-            'Kebersihan',
-            'Sanitasi',
-            'Kelistrikan',
-            'Air dan Plumbing',
-            'Perabot',
-            'Keamanan Fasilitas',
-            'Lainnya',
+            'Kerusakan Fasilitas' => 'koordinator_logistik',
+            'Kerusakan Elektronik' => 'koordinator_logistik',
+            'Kebersihan' => 'koordinator_logistik',
+            'Sanitasi' => 'koordinator_logistik',
+            'Kelistrikan' => 'koordinator_logistik',
+            'Air dan Plumbing' => 'koordinator_logistik',
+            'Perabot' => 'koordinator_logistik',
+            'Keamanan Fasilitas' => 'koordinator_keamanan',
+            'Lainnya' => null,
         ];
 
-        foreach ($categories as $name) {
+        foreach ($categories as $name => $koordinatorRole) {
             Category::updateOrCreate(
                 ['slug' => Str::slug($name)],
-                ['name' => $name, 'is_active' => true]
+                [
+                    'name' => $name,
+                    'is_active' => true,
+                    'koordinator_role' => $koordinatorRole,
+                    // Kategori keamanan = perlu penanganan khusus.
+                    'is_sensitive' => $koordinatorRole === 'koordinator_keamanan',
+                ]
             );
         }
 

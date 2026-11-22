@@ -14,9 +14,12 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="app-shell pondok-shell min-h-screen text-slate-800 antialiased">
-    {{-- Ilustrasi sebagai latar halaman publik (form lapor & cek status) --}}
-    <div class="fixed inset-0 -z-10 pondok-backdrop bg-cover bg-center"></div>
+<body class="app-shell pondok-shell relative min-h-screen text-slate-800 antialiased">
+    {{-- Ilustrasi sebagai latar halaman publik (form lapor & cek status).
+         Sengaja TIDAK `fixed`: dengan `fixed inset-0` kotaknya hanya seluas layar,
+         sehingga ilustrasi berhenti di tengah halaman. Sebagai lapisan absolut di
+         dalam `body` (yang `relative`), tingginya mengikuti tinggi DOKUMEN. --}}
+    <div class="pointer-events-none absolute inset-0 -z-10 pondok-backdrop" aria-hidden="true"></div>
 
     <header class="sticky top-0 z-20 border-b border-slate-900/[0.06] bg-white/80 backdrop-blur-xl">
         <div class="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-3 py-2.5 sm:px-6 sm:py-3">

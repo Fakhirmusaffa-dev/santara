@@ -1,16 +1,18 @@
 @php
-    $role = auth()->user()->role ?? 'petugas';
-    $home = auth()->user()?->dashboardRoute() ?? 'petugas.dashboard';
-    $allMenus = [
-        'petugas' => [
-            ['route' => $home, 'label' => 'Beranda', 'icon' => 'M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10'],
-            [
-                'route' => 'complaints.index',
-                'label' => 'Laporan',
-                'icon' => 'M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z',
-            ],
-            ['route' => 'complaints.create', 'label' => 'Buat', 'icon' => 'M12 4v16m8-8H4'],
+    $role = auth()->user()->role ?? 'koordinator_logistik';
+    $home = auth()->user()?->dashboardRoute() ?? 'koordinator.dashboard';
+    $koordinatorTabs = [
+        ['route' => $home, 'label' => 'Beranda', 'icon' => 'M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10'],
+        [
+            'route' => 'complaints.index',
+            'label' => 'Laporan',
+            'icon' => 'M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z',
         ],
+        ['route' => 'complaints.create', 'label' => 'Buat', 'icon' => 'M12 4v16m8-8H4'],
+    ];
+    $allMenus = [
+        'koordinator_keamanan' => $koordinatorTabs,
+        'koordinator_logistik' => $koordinatorTabs,
         'admin' => [
             ['route' => $home, 'label' => 'Beranda', 'icon' => 'M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10'],
             [
@@ -53,7 +55,7 @@
         ],
     ];
     // Ambil maksimal 4 menu utama; sisanya tetap bisa diakses lewat drawer "Menu".
-    $tabs = array_slice($allMenus[$role] ?? $allMenus['petugas'], 0, 4);
+    $tabs = array_slice($allMenus[$role] ?? $allMenus['admin'], 0, 4);
 @endphp
 
 <div class="glass-tabbar lg:hidden" role="navigation" aria-label="Navigasi utama">

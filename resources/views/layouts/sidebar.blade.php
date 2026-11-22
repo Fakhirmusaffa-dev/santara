@@ -1,30 +1,33 @@
 @php
-    $role = auth()->user()->role ?? 'petugas';
+    $role = auth()->user()->role ?? 'koordinator_logistik';
     $sectionOf = [
-        'petugas' => 'Ruang Tugas',
+        'koordinator_keamanan' => 'Divisi Keamanan',
+        'koordinator_logistik' => 'Divisi Logistik',
         'admin' => 'Administrasi',
         'pimpinan' => 'Pengawasan',
     ];
-    $menus = [
-        'petugas' => [
-            [
-                'route' => 'petugas.dashboard',
-                'label' => 'Tugas Saya',
-                'icon' =>
-                    'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-            ],
-            [
-                'route' => 'complaints.index',
-                'label' => 'Penugasan',
-                'icon' => 'M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z',
-            ],
-            [
-                'route' => 'notifications.index',
-                'label' => 'Notifikasi',
-                'icon' =>
-                    'M15 17h5l-1.4-1.4A2 2 0 0118 14.6V11a6 6 0 10-12 0v3.6a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
-            ],
+    $koordinatorMenu = [
+        [
+            'route' => 'koordinator.dashboard',
+            'label' => 'Tugas Saya',
+            'icon' =>
+                'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
         ],
+        [
+            'route' => 'complaints.index',
+            'label' => 'Laporan Divisi',
+            'icon' => 'M9 12h6m-6 4h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z',
+        ],
+        [
+            'route' => 'notifications.index',
+            'label' => 'Notifikasi',
+            'icon' =>
+                'M15 17h5l-1.4-1.4A2 2 0 0118 14.6V11a6 6 0 10-12 0v3.6a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
+        ],
+    ];
+    $menus = [
+        'koordinator_keamanan' => $koordinatorMenu,
+        'koordinator_logistik' => $koordinatorMenu,
         'admin' => [
             ['route' => 'admin.dashboard', 'label' => 'Dashboard', 'icon' => 'M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10'],
             [
@@ -92,7 +95,7 @@
             ],
         ],
     ];
-    $items = $menus[$role] ?? $menus['petugas'];
+    $items = $menus[$role] ?? $menus['admin'];
     $link = function ($r, $extra = '') use ($items) {
         $active = request()->routeIs($r)
             ? 'is-active bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-white/10'

@@ -40,37 +40,7 @@ html {
         background-color: #f4f6fa;
     }
 
-    /* Latar foto halaman publik (login & landing). Diatur di CSS, bukan atribut style inline.
-       Path absolut agar tetap benar di mode build & dev server. */
-    .auth-backdrop {
-        background-image: url("/images/auth-bg.jpg");
-    }
-
-    /* Latar ilustrasi untuk halaman form lapor & cek status (di atasnya ada lapisan terang).
-       Gambar 1672x941 (16:9). `contain` menjaga seluruh ilustrasi tetap utuh di layar sempit
-       yang tinggi (tidak memotong kepala/mobil), lalu lapisan warna di bawahnya menutup sisa ruang. */
-    .pondok-backdrop {
-        background-color: #dfe8f4;
-        background-image: url("/images/lapor-bg.png");
-        background-repeat: no-repeat;
-        background-size: contain;
-        background-position: center center;
-    }
-
-    /* Lapisan penenang: sedikit kabut dingin agar form kaca tidak bertabrakan dengan ilustrasi. */
-    .pondok-backdrop::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(
-            180deg,
-            rgba(223, 232, 244, 0.55) 0%,
-            rgba(223, 232, 244, 0.15) 38%,
-            rgba(223, 232, 244, 0.4) 100%
-        );
-    }
-
-    /* Halaman publik berlatarkan foto: body tidak perlu gradiennya sendiri. */
+    /* Halaman publik berlatarkan ilustrasi: body tidak perlu gradiennya sendiri. */
     body.app-shell.pondok-shell {
         background-image: none;
         background-color: #f4f6fa;
@@ -95,6 +65,84 @@ html {
     }
 }
 
+/* ---------- Latar foto & ilustrasi halaman publik ----------
+   SENGAJA di luar @layer: elemen latar hanya membawa utility Tailwind
+   (`-z-10`, `bg-cover`, `bg-center`). Di dalam @layer base, utility `bg-cover`
+   & `bg-center` (layer utilities) selalu menang, sehingga `background-size:
+   contain` di sini tidak pernah berlaku. */
+
+/* Latar foto halaman login. Path absolut agar tetap benar di mode build & dev server. */
+.auth-backdrop {
+    background-image: url("/images/auth-bg.jpg");
+}
+
+/* Latar ilustrasi untuk halaman form lapor & cek status (di atasnya ada lapisan terang).
+   Gambar 1672x941 (16:9).
+
+   Kenapa dulu "kepotong":
+   Elemen latar di layouts/guest.blade.php memakai `fixed inset-0`, jadi kotaknya
+   hanya seluas LAYAR (~720px), padahal halaman ~1210px. `background-attachment:
+   fixed` TIDAK menolong — area latar tetap sebesar kotak elemen, bukan dokumen
+   ([MDN: background-attachment](https://developer.mozilla.org/en-US/docs/CSS/background-attachment)).
+
+   Perbaikan: elemen latar dilepas dari `fixed` dan dijadikan lapisan absolut setinggi
+   DOKUMEN (`inset: 0` pada `body` yang `relative`), sehingga latar menutupi halaman
+   sampai footer dan `contain` dihitung atas tinggi dokumen. */
+.pondok-backdrop {
+    position: absolute;
+    inset: 0;
+    background-color: #f5f4f6;
+    /* Gradien = lapis 1, ilustrasi = lapis 2.
+
+       Geometri: dokumen 1280x1174, gambar 1672x941 -> `contain` = 1280x720 di
+       y 227..947 (19.3%..80.7% tinggi dokumen).
+
+       Tepi gambar TIDAK sama warnanya (hasil sampling piksel):
+          tepi atas  : #d3d3db (abu terang, sisi kiri) .. #f6f4f6 (putih)
+          tepi bawah : #4e4e56 (pita "tanah" abu gelap selebar gambar)
+       Karena itu fade dibuat ASIMETRIS, mengikuti warna tepi masing-masing:
+          - atas : abu #d3d3db larut ke latar mulai 12% dan selesai tepat di 19.3%
+          - bawah: pita tanah mulai larut jauh lebih awal (56%) dan habis di 79% —
+                   SEBELUM tepi gambar 80.7%, supaya tidak ada garis keras.
+       Keduanya butuh titik tengah yang sama-sama terang supaya latar tidak belang. */
+    background-image:
+        linear-gradient(
+            180deg,
+            #d6d7df 0%,
+            rgba(214, 215, 223, 0.65) 8%,
+            rgba(245, 244, 246, 0) 19.3%,
+            rgba(245, 244, 246, 0) 56%,
+            rgba(245, 244, 246, 0.5) 68%,
+            rgba(245, 244, 246, 0.95) 76%,
+            #f5f4f6 79%,
+            #f5f4f6 100%
+        ),
+        url("/images/lapor-bg.png");
+    background-size:
+        100% 100%,
+        contain;
+    background-position:
+        center center,
+        center center;
+    background-repeat:
+        no-repeat,
+        no-repeat;
+}
+
+/* Lapisan penenang: sedikit kabut dingin agar form kaca tidak bertabrakan dengan ilustrasi.
+   Sengaja hanya gradien vertikal tipis supaya ilustrasi tetap terlihat, bukan ditutup rata. */
+.pondok-backdrop::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(223, 232, 244, 0.28) 0%,
+        rgba(223, 232, 244, 0.06) 38%,
+        rgba(223, 232, 244, 0.22) 100%
+    );
+}
+
 ::selection {
     background: #142038;
     color: #fff;
@@ -117,238 +165,278 @@ body.ios-type {
         inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
-/* ---------- Liquid glass form publik (/lapor, /lacak) ----------
-   Ditulis di dalam @layer components agar posisinya pasti di bawah utility
-   Tailwind: permukaan kaca dipasang lewat komponen <x-card> yang juga
-   membawa utility (rounded-2xl, card-shadow, lift), jadi utility tidak boleh
-   kalah dari aturan bebas-layer di bawah.
+/* ---------- Liquid glass form publik (/lapor, /lapor/cek) ----------
+   SENGAJA di luar @layer, dan SELURUH aturan form diletakkan di sini supaya
+   urutan cascade-nya satu tempat (mobile → fallback, lihat bawah).
+   Permukaan kaca dipasang lewat <x-card class="liquid-form-card"> yang juga
+   membawa utility Tailwind (hanya `lift`, karena kelas custom sudah membuat
+   <x-card> membuang latar bawaannya), jadi tidak ada utility latar yang perlu
+   ditandingi.
 
-   Bahan kaca disusun 4 lapis seperti kaca iOS: (1) lapisan buram terang yang
-   meredam foto latar, (2) gradien tipis dari sudut atas, (3) kilau specular
-   di tepi atas kiri, (4) pantulan cahaya di tepi bawah. Foto tetap terlihat
-   bertekstur, tapi teks tetap pekat karena kacanya "susu" (frosted). */
-@layer components {
-    .liquid-form-card.card-shadow {
-        background-color: rgba(247, 250, 255, 0.56);
-        background-image: linear-gradient(
-            155deg,
-            rgba(255, 255, 255, 0.6) 0%,
-            rgba(255, 255, 255, 0.32) 40%,
-            rgba(226, 234, 246, 0.24) 100%
-        );
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        -webkit-backdrop-filter: blur(22px) saturate(190%) brightness(1.02);
-        backdrop-filter: blur(22px) saturate(190%) brightness(1.02);
-        box-shadow:
-            0 30px 70px -34px rgba(11, 20, 38, 0.55),
-            inset 0 1px 0 rgba(255, 255, 255, 0.95),
-            inset 0 -1px 0 rgba(255, 255, 255, 0.35),
-            inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-            /* Tepi bawah diberi bayangan tipis agar tebal kaca terbaca. */
-            inset 0 -10px 18px -14px rgba(11, 20, 38, 0.35);
-    }
+   Bahan kaca disusun 3 lapis seperti kaca iOS: (1) lapisan kaca "susu" dari
+   gradien + blur yang meredam ilustrasi, (2) kilau specular di tepi atas
+   (::before), (3) pantulan cahaya di tepi bawah (::after). Ilustrasi tetap
+   terlihat bertekstur, tapi teks tetap pekat.
 
-    /* Kilau specular di tepi atas kiri — ciri khas permukaan liquid glass.
-       Radial paling terang diletakkan di 0% dan dibatasi 26% tinggi kartu,
-       jadi tidak menyapu area judul/label di bagian atas. */
-    .liquid-form-card::before {
-        content: "";
-        position: absolute;
-        inset: 0 0 auto 0;
-        height: 26%;
-        pointer-events: none;
-        background:
-            radial-gradient(
-                ellipse 80% 100% at 18% 0%,
-                rgba(255, 255, 255, 0.55) 0%,
-                rgba(255, 255, 255, 0.12) 50%,
-                transparent 76%
-            ),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 100%);
-        mix-blend-mode: screen;
-    }
+   Tinggi lapisan ::before (26%) dan ::after (20%) sengaja TIDAK saling
+   tumpang tindih agar kilau atas tidak menimpa pantulan bawah di kartu pendek. */
+.liquid-form-card.card-shadow {
+    /* Pengaman: lapisan kilau ::before/::after diposisikan absolut terhadap
+       kartu ini. <x-card> sudah `relative`, tapi jangan bergantung pada itu. */
+    position: relative;
+    overflow: hidden;
+    background-color: rgba(247, 250, 255, 0.56);
+    background-image: linear-gradient(
+        155deg,
+        rgba(255, 255, 255, 0.6) 0%,
+        rgba(255, 255, 255, 0.32) 40%,
+        rgba(226, 234, 246, 0.24) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    -webkit-backdrop-filter: blur(22px) saturate(190%) brightness(1.02);
+    backdrop-filter: blur(22px) saturate(190%) brightness(1.02);
+    box-shadow:
+        0 30px 70px -34px rgba(11, 20, 38, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.35),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+        /* Tepi bawah diberi bayangan tipis agar tebal kaca terbaca. */
+        inset 0 -10px 18px -14px rgba(11, 20, 38, 0.35);
+}
 
-    /* Pantulan tepi bawah: mempertegas tebal kaca. */
-    .liquid-form-card::after {
-        content: "";
-        position: absolute;
-        inset: auto 0 0 0;
-        height: 20%;
-        pointer-events: none;
-        background: linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0%, transparent 100%);
-    }
+/* Lapis 2 — kilau specular di tepi atas. Radial paling terang diletakkan di
+   sudut kiri atas dan dibatasi 26% tinggi kartu, jadi tidak menyapu area
+   judul/label. Kelas `[class*=card]` menambah spesifisitas agar lapisan ini
+   tetap menang atas `card-shadow` (di bawah) berapa pun urutan tulisnya. */
+.liquid-form-card[class*="card"]::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 26%;
+    pointer-events: none;
+    background:
+        radial-gradient(
+            ellipse 80% 100% at 18% 0%,
+            rgba(255, 255, 255, 0.55) 0%,
+            rgba(255, 255, 255, 0.12) 50%,
+            transparent 76%
+        ),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 100%);
+    mix-blend-mode: screen;
+}
 
-    /* Form panjang tidak perlu terangkat saat disentuh. */
-    .liquid-form-card.lift:hover,
-    .liquid-form-card.lift:active {
-        transform: none;
-    }
+/* Lapis 3 — pantulan tepi bawah: mempertegas tebal kaca. */
+.liquid-form-card[class*="card"]::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 20%;
+    pointer-events: none;
+    background: linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0%, transparent 100%);
+}
 
-    /* Isi kartu mengambang di atas lapisan kaca. */
-    .liquid-form-card > .card-body {
-        position: relative;
-        z-index: 1;
-    }
+/* Form panjang tidak perlu terangkat saat disentuh. */
+.liquid-form-card.lift:hover,
+.liquid-form-card.lift:active {
+    transform: none;
+}
 
-    /* Isian di dalam kaca: kaca bertinta, bukan putih pekat. Opacity 0.72
-       menjaga teks isian selalu kontras di atas foto yang ramai. */
-    .liquid-form-card .liquid-field {
-        background-color: rgba(255, 255, 255, 0.62);
-        border-color: rgba(148, 163, 184, 0.5);
-        color: #142038;
-        -webkit-backdrop-filter: blur(6px) saturate(140%);
-        backdrop-filter: blur(6px) saturate(140%);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.9),
-            inset 0 -1px 0 rgba(11, 20, 38, 0.04),
-            0 1px 2px rgba(11, 20, 38, 0.06);
-        transition:
-            background-color 0.2s ease,
-            border-color 0.2s ease,
-            box-shadow 0.2s ease;
-    }
+/* Isi kartu mengambang di atas lapisan kaca. */
+.liquid-form-card > .card-body {
+    position: relative;
+    z-index: 1;
+}
 
-    /* Dropdown browser tidak bisa transparan: beri warna pekat senada kaca. */
-    .liquid-form-card .liquid-field option,
-    .liquid-form-card .liquid-field optgroup {
-        background-color: #f7faff;
-        color: #142038;
-    }
+/* Isian di dalam kaca: kaca bertinta, bukan putih pekat. Opacity ~0.62
+   menjaga teks isian selalu kontras di atas ilustrasi yang ramai. */
+.liquid-form-card .liquid-field {
+    background-color: rgba(255, 255, 255, 0.62);
+    border-color: rgba(148, 163, 184, 0.5);
+    color: #142038;
+    -webkit-backdrop-filter: blur(6px) saturate(140%);
+    backdrop-filter: blur(6px) saturate(140%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(11, 20, 38, 0.04),
+        0 1px 2px rgba(11, 20, 38, 0.06);
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
 
-    .liquid-form-card .liquid-field::placeholder {
-        color: #64748b;
-        opacity: 1;
-    }
+/* Dropdown browser tidak bisa transparan: beri warna pekat senada kaca. */
+.liquid-form-card .liquid-field option,
+.liquid-form-card .liquid-field optgroup {
+    background-color: #f7faff;
+    color: #142038;
+}
 
-    .liquid-form-card .liquid-field:hover {
-        background-color: rgba(255, 255, 255, 0.82);
-    }
+.liquid-form-card .liquid-field::placeholder {
+    color: #64748b;
+    opacity: 1;
+}
 
-    /* Cincin fokus lebih tebal dari aturan global agar tetap terlihat di atas kaca. */
-    .liquid-form-card .liquid-field:focus,
-    .liquid-form-card .liquid-field:focus-visible {
-        background-color: #ffffff;
-        border-color: rgba(20, 32, 56, 0.55);
-        outline: none;
-        box-shadow:
-            0 0 0 4px rgba(43, 61, 89, 0.14),
-            inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    }
+.liquid-form-card .liquid-field:hover {
+    background-color: rgba(255, 255, 255, 0.82);
+}
 
-    .liquid-form-card input[type="file"].liquid-field {
-        background-color: rgba(255, 255, 255, 0.55);
-        border-style: dashed;
-        border-color: rgba(20, 32, 56, 0.28);
-        color: #384d6f;
-    }
+/* Cincin fokus lebih tebal dari aturan global agar tetap terlihat di atas kaca. */
+.liquid-form-card .liquid-field:focus,
+.liquid-form-card .liquid-field:focus-visible {
+    background-color: #ffffff;
+    border-color: rgba(20, 32, 56, 0.55);
+    outline: none;
+    box-shadow:
+        0 0 0 4px rgba(43, 61, 89, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
 
-    /* Pratinjau foto sebagai chip kaca kecil. */
-    .liquid-form-card #photo-preview img {
-        border-radius: 0.75rem;
-        object-fit: cover;
-        box-shadow:
-            0 8px 20px -12px rgba(11, 20, 38, 0.5),
-            inset 0 0 0 1px rgba(255, 255, 255, 0.7);
-    }
+.liquid-form-card input[type="file"].liquid-field {
+    background-color: rgba(255, 255, 255, 0.55);
+    border-style: dashed;
+    border-color: rgba(20, 32, 56, 0.28);
+    color: #384d6f;
+}
 
-    /* Teks di atas kaca harus tetap terbaca: label & bantuan pakai tinta pekat. */
-    .liquid-form-card label,
-    .liquid-form-card .liquid-form-label {
-        color: #16233c;
-        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
-    }
+/* Pratinjau foto sebagai chip kaca kecil (JS menulis ke #photo-preview). */
+.liquid-form-card #photo-preview img {
+    border-radius: 0.75rem;
+    object-fit: cover;
+    box-shadow:
+        0 8px 20px -12px rgba(11, 20, 38, 0.5),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
 
-    /* Keterangan "(opsional)" tetap lebih samar tapi masih terbaca di atas kaca. */
-    .liquid-form-card label .font-normal {
-        color: #52617a;
-    }
+/* ---------- Form lapor ringkas: chip kategori & pilihan klasifikasi ----------
+   Chip = kaca kecil; yang terpilih memakai tinta navy supaya jelas "sudah dipilih"
+   tanpa perlu dropdown terbuka. */
+.chip-cat {
+    -webkit-backdrop-filter: blur(8px) saturate(150%);
+    backdrop-filter: blur(8px) saturate(150%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    -webkit-tap-highlight-color: transparent;
+}
 
-    /* "Bayangan cahaya" tipis agar teks tidak tenggelam di atas foto. */
-    .liquid-form-card .card-body {
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    }
+.chip-cat:hover {
+    background-color: rgba(255, 255, 255, 0.85);
+    color: #142038;
+}
 
-    .liquid-form-card .card-body h2,
-    .liquid-form-card .card-body h3,
-    .liquid-form-card .card-body strong {
-        color: #0b1426;
-        text-shadow: none;
-    }
+.chip-cat.is-picked {
+    background-color: #142038;
+    border-color: #142038;
+    color: #fff;
+    font-weight: 600;
+    box-shadow:
+        0 6px 14px -8px rgba(20, 32, 56, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
 
-    .liquid-form-card .card-body p,
-    .liquid-form-card .card-body span.font-normal {
-        color: #3d4a63;
-        text-shadow: none;
-    }
+/* Pilihan klasifikasi (Ya/Tidak): kaca ringan, dan yang dicentang diberi cincin navy.
+/* ---------- Catatan "sistem yang menilai" pada form lapor ----------
+   Klasifikasi tidak dipilih pelapor, jadi tidak ada kontrol yang perlu di-style.
+   Nota ini cukup jadi kaca tipis dengan garis tepi kiri navy sebagai penanda. */
+.classifier-note {
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-left: 3px solid rgba(43, 61, 89, 0.55);
+    background-color: rgba(255, 255, 255, 0.42);
+    -webkit-backdrop-filter: blur(8px) saturate(150%);
+    backdrop-filter: blur(8px) saturate(150%);
+}
 
-    /* Keterangan kecil & placeholder tetap samar, tidak ikut "ditebalkan". */
-    .liquid-form-card .card-body p.text-slate-500,
-    .liquid-form-card .card-body .text-slate-500,
-    .liquid-form-card .card-body .text-slate-600 {
-        color: #475569;
-    }
+/* Teks di atas kaca harus tetap terbaca: label & bantuan pakai tinta pekat.
+   Sekalian menimpa `text-slate-700/800` milik <label> di view. */
+.liquid-form-card label,
+.liquid-form-card .liquid-form-label {
+    color: #16233c;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
 
-    /* Tombol sekunder (Kembali) sebagai kaca ringan, bukan blok putih. */
-    .liquid-form-card .liquid-action-ghost {
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        background-color: rgba(255, 255, 255, 0.5);
-        color: #384d6f;
-        -webkit-backdrop-filter: blur(8px) saturate(150%);
-        backdrop-filter: blur(8px) saturate(150%);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-    }
+/* Keterangan "(opsional)" tetap lebih samar tapi masih terbaca di atas kaca.
+   (Bukan `.font-normal` — itu utility bobot font, bukan penanda teks redup.) */
+.liquid-form-card label .text-slate-400 {
+    color: #52617a;
+}
 
-    /* Tombol utama cembung: gradien tipis + highlight atas. */
-    .liquid-form-card .liquid-action-primary {
-        background-color: #142038;
-        background-image: linear-gradient(180deg, #24344f 0%, #142038 100%);
-        color: #fff;
-        box-shadow:
-            0 12px 24px -12px rgba(20, 32, 56, 0.7),
-            inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    }
+/* "Bayangan cahaya" tipis + warna teks, sekaligus di sini: kalau ditaruh di
+   aturan terpisah, `.card-shadow` (ditulis lebih bawah) menimpanya lagi. */
+.liquid-form-card .card-body {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    color: #3d4a63;
+}
 
-    .liquid-form-card .liquid-action-ghost:hover {
-        background-color: rgba(255, 255, 255, 0.78);
-        color: #142038;
-    }
+.liquid-form-card .card-body h2,
+.liquid-form-card .card-body h3,
+.liquid-form-card .card-body strong {
+    color: #0b1426;
+    text-shadow: none;
+}
 
-    /* Tombol utama cembung: gradien tipis + highlight atas. */
-    .liquid-form-card .liquid-action-primary {
-        background-image: linear-gradient(180deg, #24344f 0%, #142038 100%);
-        box-shadow:
-            0 12px 24px -12px rgba(20, 32, 56, 0.7),
-            inset 0 1px 0 rgba(255, 255, 255, 0.22);
-    }
+/* Keterangan kecil tetap samar, tidak ikut "ditebalkan".
+   Warna utility `text-slate-500/600` di view sengaja dibiarkan menang. */
 
-    .liquid-form-card .liquid-action-primary:hover {
-        background-image: linear-gradient(180deg, #2b3d59 0%, #1e2c44 100%);
-    }
+/* Tombol sekunder (Kembali) sebagai kaca ringan, bukan blok putih.
+   Hex + rgba (bukan shorthand `background`) supaya `background-color` di atas
+   tidak di-reset oleh `background-image` dari utility lain, dan ditulis dengan
+   spesifisitas `.liquid-form-card .liquid-action-ghost` = `.btn-press` setara —
+   urutan file menang karena `.btn-press` ada di atas. */
+.liquid-form-card .liquid-action-ghost {
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    background-color: rgba(255, 255, 255, 0.62);
+    color: #2b3d59;
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    backdrop-filter: blur(10px) saturate(160%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 6px -3px rgba(11, 20, 38, 0.25);
+}
 
-    /* Di layar HP kedua tombol sejajar: tinggi seragam, teks tetap di tengah. */
+.liquid-form-card .liquid-action-ghost:hover {
+    background-color: rgba(255, 255, 255, 0.78);
+    color: #142038;
+}
+
+/* Tombol utama cembung: gradien tipis + highlight atas. */
+.liquid-form-card .liquid-action-primary {
+    background-color: #142038;
+    background-image: linear-gradient(180deg, #24344f 0%, #142038 100%);
+    color: #fff;
+    box-shadow:
+        0 12px 24px -12px rgba(20, 32, 56, 0.7),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.liquid-form-card .liquid-action-primary:hover {
+    background-image: linear-gradient(180deg, #2b3d59 0%, #1e2c44 100%);
+}
+
+/* Di layar HP kedua tombol sejajar: tinggi seragam, teks tetap di tengah. */
+.liquid-form-card .liquid-action-primary,
+.liquid-form-card .liquid-action-ghost {
+    box-sizing: border-box;
+}
+
+@media (max-width: 639px) {
     .liquid-form-card .liquid-action-primary,
     .liquid-form-card .liquid-action-ghost {
-        box-sizing: border-box;
-    }
-
-    @media (max-width: 639px) {
-        .liquid-form-card .liquid-action-primary,
-        .liquid-form-card .liquid-action-ghost {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 2.75rem;
-            min-height: 2.75rem;
-            padding: 0 1rem;
-            font-size: 14px;
-            text-align: center;
-        }
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 2.75rem;
+        min-height: 2.75rem;
+        padding: 0 1rem;
+        font-size: 14px;
+        text-align: center;
     }
 }
 
-/* Kartu form login staf: permukaan liquid glass (kaca beku), tanpa gambar.
-   Latar foto halaman tetap terlihat samar di balik kartu lewat blur + saturasi,
-   persis seperti bahan kaca iOS. */
+/* ---------- Liquid glass kartu login staf ----------
+   Kaca "susu" tanpa gambar: foto halaman tetap terlihat samar di balik kartu
+   lewat blur + saturasi, persis bahan kaca iOS.
+   3 lapis: (1) permukaan beku dari gradien + blur, (2) kilau specular di sudut
+   atas kiri (::before), (3) pantulan tepi bawah (::after).
+   ::before/::after baru terbaca karena view memberi kartu `relative overflow-hidden`. */
 .login-card {
     background-color: rgba(255, 255, 255, 0.34);
     background-image: linear-gradient(
@@ -366,28 +454,115 @@ body.ios-type {
         inset 0 -1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Fallback: bila browser tidak mendukung backdrop-filter, kartu dibuat lebih
-   pekat agar teks tetap terbaca di atas foto latar. */
+/* Lapis 2 — kilau specular: pantulan lampu lingkungan di permukaan beku. */
+.login-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 42%;
+    pointer-events: none;
+    background:
+        radial-gradient(
+            ellipse 70% 100% at 12% 0%,
+            rgba(255, 255, 255, 0.42) 0%,
+            rgba(255, 255, 255, 0.08) 55%,
+            transparent 78%
+        ),
+        radial-gradient(ellipse 50% 90% at 92% 0%, rgba(185, 151, 91, 0.12) 0%, transparent 70%);
+    mix-blend-mode: screen;
+}
+
+/* Lapis 3 — pantulan tepi bawah: membuat tebal kaca terbaca. */
+.login-card::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 26%;
+    pointer-events: none;
+    background: linear-gradient(0deg, rgba(255, 255, 255, 0.14) 0%, transparent 100%);
+}
+
+/* Field login: kaca bertinta, bukan putih pekat.
+   Kelas `backdrop-blur` milik view di NAMPAK dihapus, karena `backdrop-filter:
+   blur()` menimpa seluruh properti — termasuk `saturate` kartu yang kita warisi —
+   sehingga field tampil "keruh" abu-abu, bukan kaca. */
+.login-card .login-field {
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    background-color: rgba(255, 255, 255, 0.72);
+    color: #142038;
+    -webkit-backdrop-filter: blur(8px) saturate(160%);
+    backdrop-filter: blur(8px) saturate(160%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(11, 20, 38, 0.05),
+        0 1px 2px rgba(11, 20, 38, 0.08);
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.login-card .login-field::placeholder {
+    color: #64748b;
+    opacity: 1;
+}
+
+.login-card .login-field:focus,
+.login-card .login-field:focus-visible {
+    background-color: rgba(255, 255, 255, 0.92);
+    border-color: rgba(20, 32, 56, 0.5);
+    outline: none;
+    box-shadow:
+        0 0 0 4px rgba(43, 61, 89, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Tombol "Kembali ke tampilan utama" sebagai kaca ringan di atas kartu. */
+.login-card .login-ghost {
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    background-color: rgba(255, 255, 255, 0.5);
+    color: #384d6f;
+    -webkit-backdrop-filter: blur(8px) saturate(150%);
+    backdrop-filter: blur(8px) saturate(150%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.login-card .login-ghost:hover {
+    background-color: rgba(255, 255, 255, 0.82);
+    color: #142038;
+}
+
+/* Fallback: bila browser tidak mendukung backdrop-filter, kaca tidak bisa
+   tembus pandang. Kartu dibuat pekat & GELAP (teksnya navy), field jadi putih
+   solid — bukan kaca, tapi tetap kontras. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .login-card {
-        background-color: rgba(20, 32, 56, 0.82);
-        background-image: linear-gradient(
-            145deg,
-            rgba(43, 61, 89, 0.9) 0%,
-            rgba(20, 32, 56, 0.86) 100%
-        );
+        background-color: #f7f9fc;
+        background-image: none;
+        border-color: rgba(20, 32, 56, 0.12);
+    }
+
+    .login-card::before,
+    .login-card::after {
+        display: none;
+    }
+
+    .login-card .login-field {
+        background-color: #fff;
     }
 }
 
-
-
 /* Form di layar kecil: lebar mengikuti layar, padding lebih rapat, teks 16px agar tidak auto-zoom.
-   Sengaja di luar @layer components agar menang atas utility Tailwind (p-4, text-sm). */
+   Sengaja di luar @layer agar menang atas utility Tailwind (p-4, text-sm).
+   Ditulis SETELAH aturan desktop di atas dan SEBELUM blok fallback — jadi urutan
+   kemenangannya jelas: desktop → mobile → fallback @supports. */
 @media (max-width: 639px) {
     .liquid-form-card.card-shadow {
         border-radius: 1.25rem;
         padding: 0;
-        background-color: rgba(247, 250, 255, 0.62);
+        /* Kaca di atas latar terang: sedikit tinta biru-abu supaya bidang kaca tetap
+           terbaca (kalau putih di atas putih, efek liquid glass hilang). */
+        background-color: rgba(238, 243, 251, 0.72);
         -webkit-backdrop-filter: blur(18px) saturate(185%) brightness(1.02);
         backdrop-filter: blur(18px) saturate(185%) brightness(1.02);
         box-shadow:
@@ -396,11 +571,35 @@ body.ios-type {
             inset 0 -1px 0 rgba(255, 255, 255, 0.35);
     }
 
-    /* Di layar kecil kaca lebih tipis dari foto: pekatkan lapisan di belakang
-       form agar teks & label tetap punya kontras cukup. */
-    .pondok-shell .pondok-backdrop::after {
-        background-color: rgba(9, 16, 30, 0.34) !important;
+    /* Di layar sempit ilustrasi 16:9 jadi sangat pendek kalau selebar layar:
+       375px lebar -> hanya 211px tinggi, dan itu pun tertutup kartu form.
+       Jadi di HP ilustrasi di-`cover` dengan AREA-nya dibatasi setinggi ~64vh
+       (bukan seluruh dokumen 1440px, yang membuat gambar membesar sampai hanya
+       potongan putih yang tampak), lalu gradien terang mengisi sisanya. */
+    .pondok-backdrop {
+        background-image:
+            linear-gradient(
+                180deg,
+                rgba(245, 244, 246, 0) 0%,
+                rgba(245, 244, 246, 0) 58%,
+                rgba(245, 244, 246, 0.85) 68%,
+                #f5f4f6 78%
+            ),
+            url("/images/lapor-bg.png");
+        background-size:
+            100% 100%,
+            auto 64vh;
+        background-position:
+            center center,
+            center top;
+        background-repeat:
+            no-repeat,
+            no-repeat;
     }
+
+    /* Catatan: overlay penguat kaca (`.pondok-backdrop::after`) sudah dihapus.
+       Aturannya tidak pernah berefek karena `::after` tidak punya `content`; dan
+       ilustrasi ini bertema terang, jadi tidak perlu lapisan gelap di belakang form. */
 
     .liquid-form-card > .card-body {
         padding: 1rem 0.875rem;
@@ -455,15 +654,23 @@ body.ios-type {
 }
 
 /* Fallback: tanpa backdrop-filter kaca tidak bisa tembus pandang, jadi
-   permukaan dibuat pekat agar teks tetap terbaca di atas foto. */
+   permukaan dibuat pekat agar teks tetap terbaca di atas ilustrasi. Lapisan
+   kilau tetap dipakai (::before/::after tidak butuh backdrop-filter), hanya
+   kacanya yang diganti warna solid. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .liquid-form-card.card-shadow {
         background-color: rgba(255, 255, 255, 0.94);
         background-image: none;
     }
 
-    .liquid-form-card .liquid-field {
+    .liquid-form-card .liquid-field,
+    .liquid-form-card input[type="file"].liquid-field {
         background-color: #fff;
+    }
+
+    /* Tanpa blur, tekstur chip foto akan tenggelam: beri latar ringan. */
+    .liquid-form-card #photo-preview img {
+        background-color: rgba(255, 255, 255, 0.8);
     }
 }
 

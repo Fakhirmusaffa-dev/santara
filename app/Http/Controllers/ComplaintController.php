@@ -12,6 +12,7 @@ use App\Models\Location;
 use App\Models\User;
 use App\Notifications\GenericAnnouncement;
 use App\Services\ActivityLogger;
+use App\Services\ComplaintClassifier;
 use App\Services\ComplaintStatusService;
 use App\Support\Notify;
 use Illuminate\Http\RedirectResponse;
@@ -68,7 +69,23 @@ class ComplaintController extends Controller
     {
         $data = $request->validated();
 
-        $complaint = DB::transaction(function () use ($request, $data) {
+        // Klasifikasi & prioritas ditentukan sistem (sama seperti form publik),
+        // agar tidak bisa dipilih manual oleh pelapor.
+        $classification = app(ComplaintClassifier::class)->classify(
+            Category::whereKey($data['category_id'])->value('is_sensitive') ? 'sensitif' : 'biasa',
+            $data['title'],
+            $data['description'],
+        );
+
+        $data['sensitivity'] = $classification['sensitivity'];
+        $data['priority'] = $classification['priority'];
+
+        // Sama seperti form publik: langsung diteruskan ke koordinator divisi.
+        $koordinatorRole = ComplaintRouter::roleForCategoryId((int) $data['category_id']);
+        $koordinator = $koordinatorRole ? User::koordinatorFor($koordinatorRole)->first() : null;
+        $statusAwal = $koordinator ? 'ditugaskan' : 'menunggu_verifikasi';
+
+        $complaint = DB::transaction(function () use ($request, $data, $koordinator, $statusAwal) {
             $complaint = Complaint::create([
                 'ticket_number' => $this->generateTicketNumber(),
                 'user_id' => $request->user()->id,
@@ -78,17 +95,29 @@ class ComplaintController extends Controller
                 'description' => $data['description'],
                 'priority' => $data['priority'],
                 'sensitivity' => $data['sensitivity'],
-                'status' => 'menunggu_verifikasi',
+                'status' => $statusAwal,
+                'assigned_to' => $koordinator?->id,
             ]);
 
             $this->storePhotos($request, $complaint, 'laporan');
 
+            if ($koordinator) {
+                $complaint->assignments()->create([
+                    'assigned_to' => $koordinator->id,
+                    'assigned_by' => null,
+                    'instruction' => 'Ditugaskan otomatis oleh sistem berdasarkan kategori laporan.',
+                    'status' => 'baru',
+                ]);
+            }
+
             ComplaintStatusHistory::create([
                 'complaint_id' => $complaint->id,
                 'from_status' => null,
-                'to_status' => 'menunggu_verifikasi',
+                'to_status' => $statusAwal,
                 'changed_by' => $request->user()->id,
-                'note' => 'Laporan dibuat pelapor.',
+                'note' => $koordinator
+                    ? "Laporan dibuat pelapor dan otomatis diteruskan ke {$koordinator->roleLabel()}."
+                    : 'Laporan dibuat pelapor.',
             ]);
 
             ActivityLogger::log('complaint_created', "Tiket {$complaint->ticket_number} dibuat", Complaint::class, $complaint->id, [
@@ -102,11 +131,25 @@ class ComplaintController extends Controller
             $request->user(),
             new GenericAnnouncement(
                 'Laporan terkirim',
-                "Laporan {$complaint->ticket_number} berhasil dikirim dan menunggu verifikasi.",
+                $koordinator
+                    ? "Laporan {$complaint->ticket_number} berhasil dikirim dan diteruskan ke {$koordinator->roleLabel()}."
+                    : "Laporan {$complaint->ticket_number} berhasil dikirim dan menunggu verifikasi.",
                 route('complaints.show', $complaint),
                 $complaint->ticket_number
             )
         );
+
+        if ($koordinator) {
+            Notify::send(
+                $koordinator,
+                new GenericAnnouncement(
+                    'Laporan baru untuk Anda',
+                    "Tiket {$complaint->ticket_number} masuk ke divisi Anda. Segera tindak lanjuti.",
+                    route('complaints.show', $complaint),
+                    $complaint->ticket_number
+                )
+            );
+        }
 
         // Triase buta: beri tahu semua admin aktif bahwa ada tiket sensitif
         // yang butuh penunjukan penangan — TANPA menyalin isi laporan.
@@ -216,7 +259,7 @@ class ComplaintController extends Controller
             User::whereNotNull('id')->chunkById(100, function ($users) use ($complaint) {
                 foreach ($users as $user) {
                     $user->notifications()
-                        ->where('data', 'like', '%' . $complaint->ticket_number . '%')
+                        ->where('data', 'like', '%'.$complaint->ticket_number.'%')
                         ->delete();
                 }
             });
@@ -234,23 +277,23 @@ class ComplaintController extends Controller
     {
         $query = Complaint::query();
 
-        if ($user->isRole('petugas')) {
+        if ($user->isKoordinator()) {
             return $query->where(function ($q) use ($user) {
                 $q->where('assigned_to', $user->id)
-                    ->orWhereHas('assignments', fn($a) => $a->where('assigned_to', $user->id));
+                    ->orWhereHas('assignments', fn ($a) => $a->where('assigned_to', $user->id));
             });
         }
 
         if ($user->isRole('pimpinan')) {
             $allowed = ComplaintAccess::where('user_id', $user->id)->pluck('complaint_id');
 
-            return $query->where(fn($q) => $q->where('sensitivity', 'biasa')->orWhereIn('id', $allowed));
+            return $query->where(fn ($q) => $q->where('sensitivity', 'biasa')->orWhereIn('id', $allowed));
         }
 
         // Admin: non-sensitif penuh + sensitif yang diberi akses eksplisit / ditugaskan ke dirinya.
         $allowed = ComplaintAccess::where('user_id', $user->id)->pluck('complaint_id');
 
-        return $query->where(fn($q) => $q->where('sensitivity', 'biasa')
+        return $query->where(fn ($q) => $q->where('sensitivity', 'biasa')
             ->orWhereIn('id', $allowed)
             ->orWhere('assigned_to', $user->id));
     }
@@ -258,7 +301,7 @@ class ComplaintController extends Controller
     protected function generateTicketNumber(): string
     {
         do {
-            $ticket = 'STR-' . now()->format('Ymd') . '-' . strtoupper(bin2hex(random_bytes(6)));
+            $ticket = 'STR-'.now()->format('Ymd').'-'.strtoupper(bin2hex(random_bytes(6)));
         } while (Complaint::where('ticket_number', $ticket)->exists());
 
         return $ticket;
@@ -274,7 +317,7 @@ class ComplaintController extends Controller
             if (! $file || ! $file->isValid()) {
                 continue;
             }
-            $path = $file->store('complaints/' . $complaint->id, 'local');
+            $path = $file->store('complaints/'.$complaint->id, 'local');
             $complaint->photos()->create([
                 'uploaded_by' => $request->user()->id,
                 'path' => $path,
@@ -444,7 +487,7 @@ class ComplaintController extends Controller
         DB::transaction(function () use ($request, $complaint, $validated) {
             $photoPath = null;
             if ($request->hasFile('photo')) {
-                $photoPath = $request->file('photo')->store('complaints/' . $complaint->id . '/handling', 'local');
+                $photoPath = $request->file('photo')->store('complaints/'.$complaint->id.'/handling', 'local');
             }
 
             $complaint->handlingLogs()->create([

@@ -7,10 +7,10 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
+use Illuminate\Notifications\HasDatabaseNotifications;
 // Trait ini WAJIB: tanpa ini `$user->notifications()` tidak ada dan semua notifikasi
 // (status laporan, penugasan, triase sensitif) tidak pernah tersimpan.
-use Illuminate\Notifications\HasDatabaseNotifications;
+use Illuminate\Notifications\Notifiable;
 
 #[Fillable(['name', 'email', 'password', 'role', 'is_active', 'phone', 'position', 'avatar_path'])]
 #[Hidden(['password', 'remember_token'])]
@@ -18,14 +18,21 @@ class User extends Authenticatable
 {
     use HasDatabaseNotifications, HasFactory, Notifiable;
 
-    public const ROLES = ['petugas', 'admin', 'pimpinan'];
+    public const ROLES = ['pelapor', 'koordinator_keamanan', 'koordinator_logistik', 'admin', 'pimpinan'];
+
+    /** Role yang boleh dipilih admin saat membuat/mengubah akun. */
+    public const STAFF_ROLES = ['koordinator_keamanan', 'koordinator_logistik', 'admin', 'pimpinan', 'pelapor'];
 
     public const ROLE_LABELS = [
         'pelapor' => 'Pelapor',
-        'petugas' => 'Petugas',
+        'koordinator_keamanan' => 'Koordinator Keamanan',
+        'koordinator_logistik' => 'Koordinator Logistik',
         'admin' => 'Admin',
         'pimpinan' => 'Pimpinan',
     ];
+
+    /** Role koordinator = penanggung jawab lapangan per divisi. */
+    public const KOORDINATOR_ROLES = ['koordinator_keamanan', 'koordinator_logistik'];
 
     protected function casts(): array
     {
@@ -72,9 +79,15 @@ class User extends Authenticatable
         return $this->role === 'pimpinan';
     }
 
-    public function isPetugas(): bool
+    public function isKoordinator(): bool
     {
-        return $this->role === 'petugas';
+        return $this->isRole(...self::KOORDINATOR_ROLES);
+    }
+
+    /** Mendapatkan koordinator aktif untuk sebuah divisi (mis. koordinator_logistik). */
+    public static function koordinatorFor(string $role)
+    {
+        return self::where('role', $role)->where('is_active', true)->get();
     }
 
     public function roleLabel(): string
@@ -86,7 +99,7 @@ class User extends Authenticatable
     {
         return match ($this->role) {
             'pelapor' => 'pelapor.dashboard',
-            'petugas' => 'petugas.dashboard',
+            'koordinator_keamanan', 'koordinator_logistik' => 'koordinator.dashboard',
             'pimpinan' => 'pimpinan.dashboard',
             default => 'admin.dashboard',
         };

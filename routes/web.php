@@ -35,7 +35,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // Dashboard per role
     Route::get('/pelapor/dashboard', [DashboardController::class, 'pelapor'])->name('pelapor.dashboard')->middleware('role:pelapor');
-    Route::get('/petugas/dashboard', [DashboardController::class, 'petugas'])->name('petugas.dashboard')->middleware('role:petugas,admin');
+    Route::get('/koordinator/dashboard', [DashboardController::class, 'koordinator'])->name('koordinator.dashboard')->middleware('role:koordinator_keamanan,koordinator_logistik,admin');
     Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard')->middleware('role:admin');
     Route::get('/pimpinan/dashboard', [DashboardController::class, 'pimpinan'])->name('pimpinan.dashboard')->middleware('role:pimpinan,admin');
 
@@ -54,9 +54,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     // (terima, progres, selesai, persetujuan) yang tetap memeriksa policy.
     Route::post('/pengaduan/{complaint}/status', [ComplaintController::class, 'changeStatus'])->name('complaints.status')->middleware('role:admin');
 
-    Route::post('/pengaduan/{complaint}/terima', [ComplaintController::class, 'acceptAssignment'])->name('complaints.accept')->middleware('role:petugas');
-    Route::post('/pengaduan/{complaint}/progres', [ComplaintController::class, 'addHandlingLog'])->name('complaints.handling')->middleware('role:petugas,admin');
-    Route::post('/pengaduan/{complaint}/selesai', [ComplaintController::class, 'submitCompletion'])->name('complaints.complete')->middleware('role:petugas');
+    Route::post('/pengaduan/{complaint}/terima', [ComplaintController::class, 'acceptAssignment'])->name('complaints.accept')->middleware('role:koordinator_keamanan,koordinator_logistik');
+    Route::post('/pengaduan/{complaint}/progres', [ComplaintController::class, 'addHandlingLog'])->name('complaints.handling')->middleware('role:koordinator_keamanan,koordinator_logistik,admin');
+    Route::post('/pengaduan/{complaint}/selesai', [ComplaintController::class, 'submitCompletion'])->name('complaints.complete')->middleware('role:koordinator_keamanan,koordinator_logistik');
 
     // ---------- Pengaduan (tambah: hapus) ----------
     Route::delete('/pengaduan/{complaint}', [ComplaintController::class, 'destroy'])->name('complaints.destroy');

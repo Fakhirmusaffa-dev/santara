@@ -18,10 +18,8 @@
         <div class="reveal mx-auto w-full max-w-md delay-160">
             <div
                 class="login-card lift relative overflow-hidden rounded-[28px]">
-                {{-- Kilau lembut di sudut atas kartu agar kesan liquid glass lebih hidup. --}}
-                <div
-                    class="pointer-events-none absolute inset-0 [background-image:radial-gradient(520px_260px_at_15%_0%,rgba(255,255,255,0.55),transparent_65%)]">
-                </div>
+                {{-- Kilau specular & pantulan tepi kartu kini dibuat CSS (::before/::after
+                     .login-card) sebagai lapis 2 & 3 kaca — tidak lagi lewat utility inline. --}}
                 <div class="relative h-1.5 bg-gradient-to-r from-navy-900 via-brass-500 to-navy-900"></div>
                 <div class="relative px-7 pb-7 pt-7 sm:px-9 sm:pb-9 sm:pt-9">
                     <div class="flex items-center gap-3">
@@ -36,7 +34,7 @@
                     </h2>
                     <p class="mt-1.5 text-sm text-slate-600">Masuk untuk mengelola laporan dan tindak lanjut Anda.</p>
                     <a href="{{ route('home') }}"
-                        class="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-white/70 backdrop-blur transition hover:bg-white hover:text-navy-900">
+                        class="login-ghost mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6M9 12h12" />
                         </svg>
@@ -58,7 +56,7 @@
                             <label for="email" class="text-[13px] font-semibold text-slate-800">Email</label>
                             <input id="email" type="email" name="email" value="{{ old('email') }}" required
                                 autofocus autocomplete="username"
-                                class="mt-1.5 w-full rounded-2xl bg-white/95 px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-white/80 backdrop-blur placeholder:text-slate-400 focus:bg-white"
+                                class="login-field mt-1.5 w-full rounded-2xl px-4 py-3 text-sm"
                                 placeholder="nama@alittihad.sch.id">
                         </div>
                         <div>
@@ -68,7 +66,7 @@
                             </div>
                             <input id="password" type="password" name="password" required
                                 autocomplete="current-password"
-                                class="mt-1.5 w-full rounded-2xl bg-white/95 px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-white/80 backdrop-blur placeholder:text-slate-400 focus:bg-white"
+                                class="login-field mt-1.5 w-full rounded-2xl px-4 py-3 text-sm"
                                 placeholder="••••••••">
                         </div>
                         <label class="flex cursor-pointer items-center gap-2.5 text-sm font-semibold text-slate-800">
@@ -82,7 +80,7 @@
                     </form>
 
                     <div
-                        class="mt-6 rounded-2xl bg-white/70 p-4 text-xs leading-relaxed text-slate-700 shadow-sm ring-1 ring-white/60 backdrop-blur">
+                        class="login-ghost mt-6 rounded-2xl p-4 text-xs leading-relaxed text-slate-700">
                         <p class="font-semibold text-slate-800">Akun staf</p>
                         <p class="mt-1 text-[11px]">Akun diberikan oleh admin pondok. Lupa kata sandi? Hubungi
                             administrator SANTARA.</p>

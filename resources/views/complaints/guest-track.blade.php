@@ -18,9 +18,9 @@
         <form method="GET" action="{{ route('guest.complaints.track') }}" class="flex flex-col gap-2.5 sm:flex-row">
             <input type="text" name="ticket" value="{{ old('ticket', $ticket) }}" required
                 placeholder="Nomor tiket laporan" autocomplete="off"
-                class="liquid-field w-full rounded-xl px-3.5 py-2.5 text-sm uppercase tracking-wide shadow-sm placeholder:text-slate-400">
+                class="liquid-field w-full rounded-xl px-3.5 py-2.5 text-sm uppercase tracking-wide">
             <button type="submit"
-                class="liquid-action-primary btn-press shrink-0 rounded-xl bg-navy-900 px-6 py-2.5 text-sm font-semibold text-white">Cari</button>
+                class="liquid-action-primary btn-press shrink-0 rounded-xl px-6 py-2.5 text-sm font-semibold">Cari</button>
         </form>
 
         <div class="mt-4 sm:mt-6">

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Complaint;
 use App\Models\Location;
@@ -10,6 +11,7 @@ use App\Models\User;
 use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -19,10 +21,10 @@ class AdminController extends Controller
     public function users(Request $request): View
     {
         $users = User::query()
-            ->when($request->filled('search'), fn($q) => $q->where(fn($qq) => $qq
-                ->where('name', 'like', '%' . $request->get('search') . '%')
-                ->orWhere('email', 'like', '%' . $request->get('search') . '%')))
-            ->when($request->filled('role'), fn($q) => $q->where('role', $request->get('role')))
+            ->when($request->filled('search'), fn ($q) => $q->where(fn ($qq) => $qq
+                ->where('name', 'like', '%'.$request->get('search').'%')
+                ->orWhere('email', 'like', '%'.$request->get('search').'%')))
+            ->when($request->filled('role'), fn ($q) => $q->where('role', $request->get('role')))
             ->latest()->paginate(12)->withQueryString();
 
         return view('admin.users.index', ['users' => $users, 'filters' => $request->only(['search', 'role'])]);
@@ -109,7 +111,7 @@ class AdminController extends Controller
         $used = array_filter($usage);
 
         if ($used !== []) {
-            $rincian = collect($used)->map(fn($n, $k) => "{$n} {$k}")->join(', ');
+            $rincian = collect($used)->map(fn ($n, $k) => "{$n} {$k}")->join(', ');
 
             return back()->withErrors(['user' => "Akun tidak dapat dihapus karena masih dipakai: {$rincian}. Nonaktifkan saja."]);
         }
@@ -165,7 +167,7 @@ class AdminController extends Controller
     public function categories(Request $request): View
     {
         $categories = Category::withCount('complaints')
-            ->when($request->filled('search'), fn($q) => $q->where('name', 'like', '%' . $request->get('search') . '%'))
+            ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.$request->get('search').'%'))
             ->orderBy('name')->paginate(12)->withQueryString();
 
         return view('admin.categories.index', [
@@ -179,12 +181,16 @@ class AdminController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100', 'unique:categories,name'],
             'description' => ['nullable', 'string', 'max:255'],
+            'is_sensitive' => ['sometimes', 'boolean'],
+            'koordinator_role' => ['nullable', Rule::in(User::KOORDINATOR_ROLES)],
         ]);
 
         $category = Category::create([
             'name' => $validated['name'],
-            'slug' => \Illuminate\Support\Str::slug($validated['name']),
+            'slug' => Str::slug($validated['name']),
             'description' => $validated['description'] ?? null,
+            'is_sensitive' => $request->boolean('is_sensitive'),
+            'koordinator_role' => $validated['koordinator_role'] ?: null,
         ]);
 
         ActivityLogger::log('category_created', "Kategori {$validated['name']} dibuat", Category::class, $category->id, [], $request);
@@ -214,13 +220,19 @@ class AdminController extends Controller
             'name' => ['required', 'string', 'max:100', Rule::unique('categories', 'name')->ignore($category->id)],
             'description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
+            'is_sensitive' => ['sometimes', 'boolean'],
+            'koordinator_role' => ['nullable', Rule::in(User::KOORDINATOR_ROLES)],
         ]);
 
         $category->update([
             'name' => $validated['name'],
-            'slug' => \Illuminate\Support\Str::slug($validated['name']),
+            'slug' => Str::slug($validated['name']),
             'description' => $validated['description'] ?? null,
             'is_active' => $request->boolean('is_active'),
+            // Kategori bertanda ini membuat laporan otomatis sensitif & mendesak.
+            'is_sensitive' => $request->boolean('is_sensitive'),
+            // Divisi penerima laporan (null = tetap lewat admin).
+            'koordinator_role' => $validated['koordinator_role'] ?: null,
         ]);
 
         ActivityLogger::log('category_updated', "Kategori {$category->name} diperbarui", Category::class, $category->id, [], $request);
@@ -255,11 +267,11 @@ class AdminController extends Controller
     public function locations(Request $request): View
     {
         $locations = Location::withCount('complaints')
-            ->when($request->filled('search'), fn($q) => $q->where(fn($qq) => $qq
-                ->where('name', 'like', '%' . $request->get('search') . '%')
-                ->orWhere('code', 'like', '%' . $request->get('search') . '%')))
+            ->when($request->filled('search'), fn ($q) => $q->where(fn ($qq) => $qq
+                ->where('name', 'like', '%'.$request->get('search').'%')
+                ->orWhere('code', 'like', '%'.$request->get('search').'%')))
             ->when($request->filled('area') && in_array($request->get('area'), ['putra', 'putri', 'umum'], true),
-                fn($q) => $q->where('area', $request->get('area')))
+                fn ($q) => $q->where('area', $request->get('area')))
             ->orderBy('area')->orderBy('name')->paginate(12)->withQueryString();
 
         return view('admin.locations.index', [
@@ -353,7 +365,7 @@ class AdminController extends Controller
         $complaints = Complaint::with(['category', 'location', 'reporter', 'assignee'])
             ->where('sensitivity', 'biasa')
             ->whereNotIn('status', ['selesai', 'ditolak', 'ditutup'])
-            ->when($request->filled('status'), fn($q) => $q->where('status', $request->get('status')))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->get('status')))
             ->orderByRaw("CASE priority WHEN 'mendesak' THEN 0 WHEN 'tinggi' THEN 1 WHEN 'sedang' THEN 2 ELSE 3 END")
             ->latest()->paginate(12)->withQueryString();
 
@@ -362,7 +374,7 @@ class AdminController extends Controller
 
     public function activities(): View
     {
-        $logs = \App\Models\ActivityLog::with('user')->latest()->paginate(15);
+        $logs = ActivityLog::with('user')->latest()->paginate(15);
 
         return view('admin.activities', ['logs' => $logs]);
     }

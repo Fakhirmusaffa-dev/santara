@@ -9,7 +9,7 @@ class ComplaintPolicy
 {
     /**
      * Cek akses laporan sensitif: need-to-know.
-     * Sensitif hanya untuk: pelapor, petugas yg ditugaskan, admin/pimpinan yg diberi akses eksplisit.
+     * Sensitif hanya untuk: pelapor, koordinator divisi yg ditugaskan, admin/pimpinan yg diberi akses eksplisit.
      */
     public function viewSensitive(User $user, Complaint $complaint): bool
     {
@@ -21,7 +21,7 @@ class ComplaintPolicy
             return true;
         }
 
-        if ($user->isRole('petugas') && (int) $complaint->assigned_to === (int) $user->id) {
+        if ($user->isKoordinator() && (int) $complaint->assigned_to === (int) $user->id) {
             return true;
         }
 
@@ -39,7 +39,7 @@ class ComplaintPolicy
             return true;
         }
 
-        if ($user->isRole('petugas')) {
+        if ($user->isKoordinator()) {
             if ((int) $complaint->assigned_to === (int) $user->id) {
                 return true;
             }
@@ -47,7 +47,8 @@ class ComplaintPolicy
                 return false;
             }
 
-            // Petugas boleh melihat daftar umum non-sensitif yang relevan (ditugaskan ke dirinya).
+            // Koordinator hanya melihat laporan yang ditugaskan kepadanya/divisinya
+            // (tidak bisa mengintip laporan divisi lain).
             return $complaint->assignments()->where('assigned_to', $user->id)->exists();
         }
 
@@ -132,7 +133,7 @@ class ComplaintPolicy
             return false;
         }
 
-        return $user->isRole('petugas')
+        return $user->isKoordinator()
             && (int) $complaint->assigned_to === (int) $user->id
             && $complaint->isOpen();
     }

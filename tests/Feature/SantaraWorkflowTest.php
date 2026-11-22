@@ -65,6 +65,68 @@ class SantaraWorkflowTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_system_classifies_complaint_and_reporter_cannot_override_it(): void
+    {
+        $umum = Category::firstOrFail(); // kategori umum dari seeder
+        $keamanan = Category::create([
+            'name' => 'Keamanan',
+            'slug' => 'keamanan',
+            'is_active' => true,
+            'is_sensitive' => true,
+        ]);
+
+        $base = [
+            'location_id' => Location::firstOrFail()->id,
+            'title' => 'Keran asrama bocor parah',
+            'description' => 'Keran wastafel asrama putra bocor sejak dua hari dan menggenangi lantai.',
+        ];
+
+        // 1. Kategori Keamanan (pembulian): pelapor mencoba menyamarkan jadi 'biasa'
+        //    dan prioritas 'rendah' -> sistem tetap menetapkan sensitif + mendesak.
+        //    (Array spesifik ditaruh di kanan `+` agar menang atas nilai dasar.)
+        $this->post(route('guest.complaints.store'), [
+            'category_id' => $keamanan->id,
+            'title' => 'Pembulian di asrama putra blok A',
+            'sensitivity' => 'biasa',
+            'priority' => 'rendah',
+        ] + $base)->assertRedirect();
+
+        $this->assertDatabaseHas('complaints', [
+            'title' => 'Pembulian di asrama putra blok A',
+            'sensitivity' => 'sensitif',
+            'priority' => 'mendesak',
+        ]);
+
+        // 2. Kategori umum + tidak ada kata kunci berisiko -> biasa + sedang.
+        $this->post(route('guest.complaints.store'), [
+            'category_id' => $umum->id,
+            'sensitivity' => 'sensitif',
+            'priority' => 'mendesak',
+        ] + $base)->assertRedirect();
+
+        $biasa = Complaint::latest('id')->firstOrFail();
+        $this->assertSame('biasa', $biasa->sensitivity);
+        $this->assertSame('sedang', $biasa->priority);
+    }
+
+    public function test_risk_keywords_make_a_general_category_sensitive(): void
+    {
+        $umum = Category::firstOrFail();
+
+        foreach (['Saya di-bully teman sekelas', 'Ada ancaman dan pemukulan di asrama'] as $judul) {
+            $this->post(route('guest.complaints.store'), [
+                'category_id' => $umum->id,
+                'location_id' => Location::firstOrFail()->id,
+                'title' => $judul,
+                'description' => 'Kejadian ini berulang dan saya sudah tidak berani masuk kelas.',
+            ])->assertRedirect();
+
+            $complaint = Complaint::latest('id')->firstOrFail();
+            $this->assertSame('sensitif', $complaint->sensitivity, "Gagal mendeteksi: {$judul}");
+            $this->assertSame('mendesak', $complaint->priority);
+        }
+    }
+
     public function test_login_redirects_by_role(): void
     {
         foreach (
@@ -239,11 +301,12 @@ class SantaraWorkflowTest extends TestCase
             'category_id' => Category::first()->id,
             'location_id' => Location::first()->id,
             'title' => 'Laporan pribadi yang perlu dibatasi aksesnya',
-            'description' => 'Isi laporan sensitif yang hanya boleh dibaca pihak yang ditunjuk institusi.',
-            'priority' => 'tinggi',
-            'sensitivity' => 'sensitif',
+            'description' => 'Isi laporan sensitif berisi ancaman yang hanya boleh dibaca pihak yang ditunjuk institusi.',
         ]);
         $complaint = Complaint::firstOrFail();
+
+        // Sistem (bukan pelapor) yang menetapkan sensitif berdasarkan isi laporan.
+        $this->assertSame('sensitif', $complaint->sensitivity);
 
         // Admin tanpa akses eksplisit: ditolak.
         $this->actingAs($this->admin)->get(route('complaints.show', $complaint))->assertForbidden();

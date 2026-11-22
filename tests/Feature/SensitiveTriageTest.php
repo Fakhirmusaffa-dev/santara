@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Complaint;
 use App\Models\Location;
 use App\Models\User;
+use Database\Seeders\SantaraSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,23 +17,24 @@ class SensitiveTriageTest extends TestCase
     public function test_triase_buta_sampai_selesai_tanpa_bocor(): void
     {
         $this->withoutVite();
-        $this->seed(\Database\Seeders\SantaraSeeder::class);
+        $this->seed(SantaraSeeder::class);
 
         $pelapor = User::where('email', 'pelapor@santara.test')->firstOrFail();
         $admin = User::where('email', 'admin@santara.test')->firstOrFail();
         $pimpinan = User::where('email', 'pimpinan@santara.test')->firstOrFail();
         $petugas = User::where('email', 'petugas@santara.test')->firstOrFail();
 
-        // 1. Santri lapor sensitif.
+        // 1. Santri lapor sensitif. Klasifikasi TIDAK dipilih pelapor: sistem yang
+        //    menetapkan karena isinya menyangkut kekerasan (kata kunci berisiko).
         $this->actingAs($pelapor)->post(route('complaints.store'), [
             'category_id' => Category::first()->id,
             'location_id' => Location::first()->id,
             'title' => 'Judul rahasia yang tidak boleh bocor',
-            'description' => 'Isi sangat rahasia yang tidak boleh tampil di antrean mana pun.',
-            'priority' => 'tinggi',
-            'sensitivity' => 'sensitif',
-        ])->assertRedirect();
+            'description' => 'Isi sangat rahasia tentang ancaman kekerasan yang tidak boleh tampil di antrean mana pun.',
+        ])->assertSessionHasNoErrors()->assertRedirect();
         $complaint = Complaint::latest()->firstOrFail();
+
+        $this->assertSame('sensitif', $complaint->sensitivity);
 
         // 2. Admin lain dapat notifikasi tiket SAJA (tanpa isi laporan).
         $notif = $admin->notifications()->latest()->firstOrFail();

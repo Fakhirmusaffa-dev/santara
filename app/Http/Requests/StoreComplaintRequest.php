@@ -20,8 +20,10 @@ class StoreComplaintRequest extends FormRequest
             'location_id' => ['required', 'exists:locations,id'],
             'title' => ['required', 'string', 'min:8', 'max:180'],
             'description' => ['required', 'string', 'min:20', 'max:5000'],
-            'priority' => ['required', Rule::in(Complaint::PRIORITIES)],
-            'sensitivity' => ['required', Rule::in(Complaint::SENSITIVITIES)],
+            // Prioritas & klasifikasi tidak lagi diisi pelapor: keduanya ditentukan
+            // sistem di controller (App\Services\ComplaintClassifier).
+            'priority' => ['nullable', Rule::in(Complaint::PRIORITIES)],
+            'sensitivity' => ['nullable', Rule::in(Complaint::SENSITIVITIES)],
             'photos' => ['nullable', 'array', 'max:4'],
             'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ];

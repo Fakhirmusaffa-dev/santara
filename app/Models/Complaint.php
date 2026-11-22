@@ -16,6 +16,18 @@ class Complaint extends Model
 
     public const SENSITIVITIES = ['biasa', 'sensitif'];
 
+    /**
+     * Prioritas BAKU per klasifikasi. Pelapor tidak lagi memilih prioritas sendiri:
+     * nilainya diturunkan dari klasifikasi agar laporan tidak bisa "dinaikkan" sepihak
+     * demi didahulukan. Klasifikasi sensitif otomatis dianggap mendesak.
+     *
+     * @var array<string, string>
+     */
+    public const PRIORITY_BY_SENSITIVITY = [
+        'biasa' => 'sedang',
+        'sensitif' => 'mendesak',
+    ];
+
     public const STATUSES = [
         'draft',
         'menunggu_verifikasi',
@@ -158,6 +170,15 @@ class Complaint extends Model
     public function isSensitive(): bool
     {
         return $this->sensitivity === 'sensitif';
+    }
+
+    /**
+     * Prioritas yang berlaku untuk sebuah klasifikasi.
+     * Klasifikasi tak dikenal jatuh ke prioritas teraman ('sedang'), bukan 'mendesak'.
+     */
+    public static function priorityForSensitivity(?string $sensitivity): string
+    {
+        return self::PRIORITY_BY_SENSITIVITY[$sensitivity] ?? 'sedang';
     }
 
     public function isOpen(): bool

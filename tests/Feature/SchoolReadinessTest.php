@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\Approval;
 use App\Models\Category;
 use App\Models\Complaint;
 use App\Models\Location;
 use App\Models\User;
+use Database\Seeders\SantaraSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -20,15 +20,18 @@ class SchoolReadinessTest extends TestCase
     use RefreshDatabase;
 
     protected User $pelapor;
+
     protected User $petugas;
+
     protected User $admin;
+
     protected User $pimpinan;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->withoutVite();
-        $this->seed(\Database\Seeders\SantaraSeeder::class);
+        $this->seed(SantaraSeeder::class);
 
         $this->pelapor = User::where('email', 'pelapor@santara.test')->firstOrFail();
         $this->petugas = User::where('email', 'petugas@santara.test')->firstOrFail();
@@ -55,8 +58,6 @@ class SchoolReadinessTest extends TestCase
             'location_id' => Location::first()->id,
             'title' => 'Keran asrama putra blok A bocor deras',
             'description' => 'Keran wastafel asrama putra blok A bocor deras sejak tadi malam dan menggenangi lantai kamar mandi.',
-            'priority' => 'tinggi',
-            'sensitivity' => 'biasa',
             'photos' => [$foto],
         ])->assertRedirect();
         $complaint = Complaint::latest()->firstOrFail();
@@ -165,12 +166,13 @@ class SchoolReadinessTest extends TestCase
             'category_id' => Category::first()->id,
             'location_id' => Location::first()->id,
             'title' => 'Laporan pribadi yang perlu dibatasi aksesnya',
-            'description' => 'Isi laporan sensitif yang hanya boleh dibaca pihak yang ditunjuk institusi sekolah.',
-            'priority' => 'tinggi',
-            'sensitivity' => 'sensitif',
+            'description' => 'Isi laporan sensitif berisi ancaman yang hanya boleh dibaca pihak yang ditunjuk institusi sekolah.',
             'photos' => [UploadedFile::fake()->image('rahasia.jpg')],
         ])->assertRedirect();
         $complaint = Complaint::latest()->firstOrFail();
+
+        // Klasifikasi sensitif datang dari sistem (kata kunci "ancaman"), bukan input pelapor.
+        $this->assertSame('sensitif', $complaint->sensitivity);
         $foto = $complaint->photos()->firstOrFail();
 
         // Admin & pimpinan tanpa akses: halaman + file sama-sama 403.

@@ -28,18 +28,21 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function petugas(): View
+    /** Dashboard koordinator (keamanan / logistik): laporan divisinya sendiri. */
+    public function koordinator(): View
     {
         $user = auth()->user();
 
         $base = $user->assignedComplaints();
 
-        return view('dashboards.petugas', [
+        return view('dashboards.koordinator', [
             'total' => $user->assignments()->count(),
             'baru' => $user->assignments()->where('status', 'baru')->count(),
             'ditangani' => (clone $base)->whereIn('status', ['ditugaskan', 'sedang_ditangani'])->count(),
             'pemeriksaan' => (clone $base)->where('status', 'menunggu_pemeriksaan')->count(),
-            'tugas' => (clone $base)->with(['category', 'location', 'reporter'])->latest()->take(6)->get(),
+            'mendesak' => (clone $base)->whereIn('priority', ['tinggi', 'mendesak'])
+                ->whereNotIn('status', ['selesai', 'ditolak', 'ditutup'])->count(),
+            'tugas' => (clone $base)->with(['category', 'location', 'reporter'])->latest()->take(8)->get(),
         ]);
     }
 

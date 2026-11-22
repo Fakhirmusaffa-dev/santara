@@ -22,13 +22,14 @@
         $timeMessage = 'Terima kasih atas kerja kerasmu hari ini.';
     }
 
-    // Hanya petugas, admin, pimpinan yang login. Role pelapor sudah tidak ada.
+    // Staf yang login: koordinator per divisi, admin, dan pimpinan.
     $roleMessages = [
-        'petugas' => 'Terima kasih atas dedikasimu menangani setiap aduan dengan tuntas dan penuh empati.',
+        'koordinator_keamanan' => 'Laporan keamanan langsung masuk ke meja Anda. Tindak lanjuti dengan tenang dan rahasia.',
+        'koordinator_logistik' => 'Laporan sarana & prasarana langsung masuk ke meja Anda. Prioritaskan kerusakan yang menghambat aktivitas.',
         'admin' => 'Sistem siap membantumu mengelola aduan, lokasi, dan pengguna dengan tertib dan transparan.',
         'pimpinan' => 'Ringkasan laporan dan persetujuan hari ini sudah menunggu tinjauan Anda.',
     ];
-    $roleMessage = $roleMessages[auth()->user()->role ?? 'petugas'] ?? $roleMessages['petugas'];
+    $roleMessage = $roleMessages[auth()->user()->role ?? 'admin'] ?? $roleMessages['admin'];
 @endphp
 
 <header class="sticky top-0 z-20 border-b border-slate-900/[0.06] bg-white/80 backdrop-blur-xl">

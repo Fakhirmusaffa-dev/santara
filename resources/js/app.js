@@ -61,6 +61,47 @@ const start = () => {
             });
         });
 
+    // ---------- Chip kategori (form lapor publik) ----------
+    // Select asli tetap jadi sumber data & nilai yang dikirim; chip hanya
+    // representasi visualnya supaya pelapor memilih lebih cepat daripada dropdown.
+    const chipHost = document.getElementById("category-chips");
+    const categorySelect = document.getElementById("category_id");
+
+    if (chipHost && categorySelect) {
+        const chips = [...categorySelect.options]
+            .filter((opt) => opt.value !== "")
+            .map((opt) => {
+                const chip = document.createElement("button");
+                chip.type = "button";
+                chip.dataset.value = opt.value;
+                chip.textContent = opt.textContent.trim();
+                chip.className =
+                    "chip-cat rounded-lg border border-white/70 bg-white/60 px-3 py-1.5 text-[12.5px] font-medium text-slate-700 transition";
+                chip.setAttribute("aria-pressed", "false");
+                return chip;
+            });
+
+        const paint = (value) => {
+            chips.forEach((chip) => {
+                const on = chip.dataset.value === value;
+                chip.setAttribute("aria-pressed", on ? "true" : "false");
+                chip.classList.toggle("is-picked", on);
+            });
+        };
+
+        chips.forEach((chip) => {
+            chip.addEventListener("click", () => {
+                categorySelect.value = chip.dataset.value;
+                categorySelect.dispatchEvent(new Event("change", { bubbles: true }));
+                paint(chip.dataset.value);
+            });
+            chipHost.appendChild(chip);
+        });
+
+        // Kembalikan pilihan setelah validasi gagal (old input).
+        paint(categorySelect.value);
+    }
+
     // Konfirmasi aksi penting
     document.querySelectorAll("[data-confirm]").forEach((el) => {
         el.addEventListener("click", (e) => {
